@@ -1,0 +1,283 @@
+openapi: 3.1.0
+info:
+  title: Feed Service API
+  version: 1.0.0
+  description: API для управления лентой, подписками и публикацией постов.
+
+servers:
+  - url: http://localhost
+
+components:
+  parameters:
+    X-User-Id:
+      in: header
+      description: Идентификатор пользователя
+      schema:
+        type: integer
+      required: true
+
+  schemas:
+    PostRequest:
+      type: object
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          description: Текст поста
+
+    SubUnsubRequest:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: integer
+          description: Идентификатор пользователя, на которого подписываемся/отписываемся
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Причина ошибки
+
+    FeedItem:
+      type: object
+      required:
+        - postId
+        - userId
+        - text
+        - likes
+      properties:
+        postId:
+          type: integer
+          description: Идентификатор поста
+        userId:
+          type: integer
+          description: Идентификатор автора поста
+        text:
+          type: string
+          description: Текст поста
+        likes:
+          type: integer
+          description: Количество лайков у поста
+
+    PostAction:
+      type: object
+      required:
+        - postId
+      properties:
+        postId:
+          type: integer
+          description: Идентификатор поста
+
+    FeedResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/FeedItem'
+
+paths:
+  /post:
+    post:
+      summary: Создать новый пост
+      description: Публикует пост от текущего пользователя
+      parameters:
+        - $ref: '#/components/parameters/X-User-Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostRequest'
+      responses:
+        '200':
+          description: Пост успешно создан
+          content:
+            application/json:
+              schema:
+                type: string
+                example: "ok"
+        '400':
+          description: Ошибка запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /subscribe:
+    post:
+      summary: Подписка на пользователя
+      parameters:
+        - $ref: '#/components/parameters/X-User-Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubUnsubRequest'
+      responses:
+        '200':
+          description: Успешно подписан
+          content:
+            application/json:
+              schema:
+                type: string
+                example: "ok"
+        '400':
+          description: Ошибка запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /unsubscribe:
+    post:
+      summary: Отписка от пользователя
+      parameters:
+        - $ref: '#/components/parameters/X-User-Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubUnsubRequest'
+      responses:
+        '200':
+          description: Успешно отписан
+          content:
+            application/json:
+              schema:
+                type: string
+                example: "ok"
+        '400':
+          description: Ошибка запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /feed:
+    get:
+      summary: Получить ленту пользователя
+      parameters:
+        - $ref: '#/components/parameters/X-User-Id'
+        - name: count
+          in: query
+          description: Количество постов в ответе
+          required: false
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Список постов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedResponse'
+        '400':
+          description: Ошибка запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /like:
+    post:
+      summary: Лайкнуть пост
+      parameters:
+        - $ref: '#/components/parameters/X-User-Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostAction'
+      responses:
+        '200':
+          description: Пост успешно лайкнут
+          content:
+            application/json:
+              schema:
+                type: string
+                example: "ok"
+        '400':
+          description: Ошибка запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /unlike:
+    post:
+      summary: Убрать лайк с поста
+      parameters:
+        - $ref: '#/components/parameters/X-User-Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostAction'
+      responses:
+        '200':
+          description: Лайк успешно убран
+          content:
+            application/json:
+              schema:
+                type: string
+                example: "ok"
+        '400':
+          description: Ошибка запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /ready:
+    get:
+      summary: Проверка готовности сервиса
+      responses:
+        '200':
+          description: Сервис готов
+        '503':
+          description: Сервис не готов

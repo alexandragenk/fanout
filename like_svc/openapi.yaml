@@ -1,0 +1,149 @@
+openapi: 3.1.0
+info:
+  title: Like Service API
+  version: 1.0.0
+  description: API для управления лайками под постами.
+
+servers:
+  - url: http://localhost
+
+components:
+  parameters:
+    X-User-Id:
+      in: header
+      description: Идентификатор пользователя
+      schema:
+        type: integer
+      required: true
+
+  schemas:
+    PostAction:
+      type: object
+      required:
+        - postId
+      properties:
+        postId:
+          type: integer
+          description: Идентификатор поста
+          example: 42
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Причина ошибки
+
+paths:
+  /like:
+    post:
+      summary: Поставить лайк посту
+      parameters:
+        - $ref: '#/components/parameters/X-User-Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostAction'
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: string
+                example: ok
+        '400':
+          description: Ошибка запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /unlike:
+    post:
+      summary: Убрать лайк с поста
+      parameters:
+        - $ref: '#/components/parameters/X-User-Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostAction'
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: string
+                example: ok
+        '400':
+          description: Ошибка запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /likes:
+    post:
+      summary: Получить количество лайков для списка постов
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: integer
+              example: [1, 3, 2]
+      responses:
+        '200':
+          description: Карта postId → количество лайков
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: integer
+              example:
+                "1": 3
+                "3": 0
+                "2": 5
+        '400':
+          description: Ошибка запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /ready:
+    get:
+      summary: Проверка готовности сервиса
+      responses:
+        '200':
+          description: Сервис готов
+        '503':
+          description: Сервис не готов

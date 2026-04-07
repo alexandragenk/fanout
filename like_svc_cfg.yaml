@@ -1,0 +1,3 @@
+run_address: ":8086"
+database_uri: "postgres://postgres@like-db:5432/like_svc?sslmode=disable"
+migrations_path: "file://migrations"
