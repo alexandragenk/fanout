@@ -72,7 +72,7 @@ services:
     ports:
       - "11434:11434"
     entrypoint: ["sh", "-c"]
-    command: '"ollama serve & sleep 5 ; ollama pull llama3:8b ; ollama cp llama3:8b default ; wait"'
+    command: '"ollama serve & sleep 5 ; ollama pull phi3 ; ollama cp phi3 default ; wait"'
     volumes:
       - ./ollama_cache:/root/.ollama
     restart: on-failure

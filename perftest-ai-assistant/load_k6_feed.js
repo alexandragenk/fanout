@@ -5,8 +5,10 @@ export const options = {
     duration: '1m',
 };
 
+const base_url = __ENV.service_url || 'http://localhost:8080';
+
 export default function () {
-    http.get('http://localhost:8080/feed', {
+    http.get(base_url + '/feed', {
         headers: {
             'X-User-Id': String(__VU),
         },

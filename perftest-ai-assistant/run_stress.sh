@@ -2,9 +2,7 @@
 
 . config.sh
 
-k6 run --duration $duration load_k6_feed.js
-
-PROM="http://localhost:9090/api/v1/query"
+k6 run -e service_url=$service_url --duration $duration load_k6_feed.js
 
 queries=(
 "sum(rate(http_request_duration_seconds_count{route='feed'}[$duration]))"
@@ -33,20 +31,35 @@ queries=(
 "sum(rate(container_fs_writes_total{name='fanout-like-db-1'}[$duration]))"
 )
 
-result=""
+metrics=""
 for q in "${queries[@]}"; do
-    value=`curl -sG "$PROM" --data-urlencode "query=$q" | jq -r '.data.result[0].value[1] // "NaN"'`
-    result+="$q: $value"$'\n'
+    value=`curl -sG $prometheus_url/api/v1/query --data-urlencode "query=$q" | jq -r '.data.result[0].value[1] // "NaN"'`
+    metrics+="$q: $value"$'\n'
 done
 
-echo "$result"
+echo "$metrics"
 
-escaped=$(printf 'Сервис лент использует сервис лайков. Проведен стресс тест. Что можешь сказать по этим метрикам?\n%s' "$result" | jq -Rs .)
+until curl -sf $ollama_url/api/tags | grep -q '"name"'; do
+  echo "Waiting for LLM readiness.."
+  sleep 1
+done
 
 echo "Analyzing..."
 
-curl -s http://localhost:11434/api/generate -d "{
+read -r -d '' prompt <<EOF
+Проведен стресс тест сервиса лент.
+Он использует сервис лайков.
+Ниже метрики обоих сервисов:
+
+$metrics
+
+1. Найди аномалии
+2. Предложи возможные причины
+3. Сделай краткий вывод
+EOF
+
+curl -s $ollama_url/api/generate -d "{
   \"model\": \"default\",
   \"stream\": false,
-  \"prompt\": $escaped
+  \"prompt\": `jq -Rs . <<<"$prompt"`
 }" | jq -r '.response'
