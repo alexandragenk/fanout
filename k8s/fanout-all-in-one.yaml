@@ -1,0 +1,538 @@
+# Apply with: kubectl apply -f fanout-all-in-one.yaml
+# Then replace image placeholders in this file before apply.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fanout
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feed-svc-config
+  namespace: fanout
+data:
+  config.yaml: |
+    run_address: ":8080"
+    database_uri: "postgres://postgres:postgres@feed-db:5432/feed_svc?sslmode=disable"
+    like_service_url: "http://like-svc:8086"
+    migrations_path: "file://migrations"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: like-svc-config
+  namespace: fanout
+data:
+  config.yaml: |
+    run_address: ":8086"
+    database_uri: "postgres://postgres:postgres@like-db:5432/like_svc?sslmode=disable"
+    migrations_path: "file://migrations"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: fanout
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s
+    scrape_configs:
+      - job_name: 'feed-svc'
+        static_configs:
+          - targets: ['feed-svc:8080']
+      - job_name: 'like-svc'
+        static_configs:
+          - targets: ['like-svc:8086']
+      - job_name: 'cadvisor'
+        static_configs:
+          - targets: ['cadvisor:8080']
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: feed-db
+  namespace: fanout
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: feed-db
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: feed-db
+  namespace: fanout
+spec:
+  serviceName: feed-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: feed-db
+  template:
+    metadata:
+      labels:
+        app: feed-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: postgres
+            - name: POSTGRES_DB
+              value: feed_svc
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U postgres -d feed_svc"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: like-db
+  namespace: fanout
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: like-db
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: like-db
+  namespace: fanout
+spec:
+  serviceName: like-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: like-db
+  template:
+    metadata:
+      labels:
+        app: like-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: postgres
+            - name: POSTGRES_DB
+              value: like_svc
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U postgres -d like_svc"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feed-svc
+  namespace: fanout
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: feed-svc
+  template:
+    metadata:
+      labels:
+        app: feed-svc
+    spec:
+      containers:
+        - name: feed-svc
+          image: akalashnikova7/fanout-feed:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: CONFIG_PATH
+              value: /app/config.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: feed-svc-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: feed-svc
+  namespace: fanout
+spec:
+  selector:
+    app: feed-svc
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: like-svc
+  namespace: fanout
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: like-svc
+  template:
+    metadata:
+      labels:
+        app: like-svc
+    spec:
+      containers:
+        - name: like-svc
+          image: akalashnikova7/fanout-like:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8086
+          env:
+            - name: CONFIG_PATH
+              value: /app/config.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8086
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 8086
+            initialDelaySeconds: 20
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: like-svc-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: like-svc
+  namespace: fanout
+spec:
+  selector:
+    app: like-svc
+  ports:
+    - name: http
+      port: 8086
+      targetPort: 8086
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cadvisor
+  namespace: fanout
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cadvisor
+  template:
+    metadata:
+      labels:
+        app: cadvisor
+    spec:
+      containers:
+        - name: cadvisor
+          image: gcr.io/cadvisor/cadvisor:latest
+          ports:
+            - containerPort: 8080
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: rootfs
+              mountPath: /rootfs
+              readOnly: true
+            - name: var-run
+              mountPath: /var/run
+              readOnly: true
+            - name: sys
+              mountPath: /sys
+              readOnly: true
+            - name: docker
+              mountPath: /var/lib/docker
+              readOnly: true
+      volumes:
+        - name: rootfs
+          hostPath:
+            path: /
+        - name: var-run
+          hostPath:
+            path: /var/run
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: docker
+          hostPath:
+            path: /var/lib/docker
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cadvisor
+  namespace: fanout
+spec:
+  selector:
+    app: cadvisor
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: fanout
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:latest
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: fanout
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: fanout
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      containers:
+        - name: ollama
+          image: ollama/ollama:latest
+          ports:
+            - containerPort: 11434
+          command: ["sh", "-c"]
+          args:
+            - |
+              ollama serve &
+              sleep 5
+              ollama pull gemma4:e4b
+              ollama cp gemma4:e4b default || true
+              wait
+          volumeMounts:
+            - name: ollama-data
+              mountPath: /root/.ollama
+      volumes:
+        - name: ollama-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: fanout
+spec:
+  selector:
+    app: ollama
+  ports:
+    - name: http
+      port: 11434
+      targetPort: 11434
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argo-workflow
+  namespace: fanout
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-workflow-role
+  namespace: fanout
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows", "workflowtemplates"]
+    verbs: ["get", "list", "watch", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-workflow-rb
+  namespace: fanout
+subjects:
+  - kind: ServiceAccount
+    name: argo-workflow
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argo-workflow-role
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: fanout-perftest-pipeline
+  namespace: fanout
+spec:
+  serviceAccountName: argo-workflow
+  entrypoint: main
+  arguments:
+    parameters:
+      - name: assistant-image
+        value: akalashnikova7/k6:latest
+      - name: fill-image
+        value: curlimages/curl:8.7.1
+  templates:
+    - name: main
+      dag:
+        tasks:
+          - name: wait-services
+            template: wait-services
+          - name: seed-data
+            dependencies: [wait-services]
+            template: seed-data
+          - name: run-assistant
+            dependencies: [seed-data]
+            template: run-assistant
+
+    - name: wait-services
+      container:
+        image: curlimages/curl:8.7.1
+        command: [sh, -c]
+        args:
+          - |
+            set -eu
+            until curl -sf http://feed-svc:8080/ready; do echo waiting feed; sleep 3; done
+            until curl -sf http://like-svc:8086/ready; do echo waiting like; sleep 3; done
+            until curl -sf http://prometheus:9090/-/ready; do echo waiting prometheus; sleep 3; done
+            until curl -sf http://ollama:11434/api/tags >/dev/null; do echo waiting ollama; sleep 5; done
+
+    - name: seed-data
+      script:
+        image: "{{workflow.parameters.fill-image}}"
+        command: [sh]
+        source: |
+          set -eu
+          for i in $(seq 1 200); do
+            curl -sf -X POST http://like-svc:8086/api/v1/like/$i >/dev/null || true
+          done
+          echo "Seed step finished"
+
+    - name: run-assistant
+      container:
+        image: "{{workflow.parameters.assistant-image}}"
+        imagePullPolicy: Always
+        env:
+          - name: service_url
+            value: http://feed-svc:8080
+          - name: prometheus_url
+            value: http://prometheus:9090
+          - name: ollama_url
+            value: http://ollama:11434
+          - name: duration
+            value: 2m
