@@ -30,26 +30,6 @@ data:
     migrations_path: "file://migrations"
 ---
 apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: prometheus-config
-  namespace: fanout
-data:
-  prometheus.yml: |
-    global:
-      scrape_interval: 5s
-    scrape_configs:
-      - job_name: 'feed-svc'
-        static_configs:
-          - targets: ['feed-svc:8080']
-      - job_name: 'like-svc'
-        static_configs:
-          - targets: ['like-svc:8086']
-      - job_name: 'cadvisor'
-        static_configs:
-          - targets: ['cadvisor:8080']
----
-apiVersion: v1
 kind: Service
 metadata:
   name: feed-db
@@ -76,6 +56,8 @@ spec:
     metadata:
       labels:
         app: feed-db
+        app.kubernetes.io/name: feed-db
+        metrics_group: feed-db
     spec:
       containers:
         - name: postgres
@@ -133,6 +115,8 @@ spec:
     metadata:
       labels:
         app: like-db
+        app.kubernetes.io/name: like-db
+        metrics_group: like-db
     spec:
       containers:
         - name: postgres
@@ -177,6 +161,8 @@ spec:
     metadata:
       labels:
         app: feed-svc
+        app.kubernetes.io/name: feed-svc
+        metrics_group: feed-svc
     spec:
       containers:
         - name: feed-svc
@@ -213,6 +199,8 @@ kind: Service
 metadata:
   name: feed-svc
   namespace: fanout
+  labels:
+    app: feed-svc
 spec:
   selector:
     app: feed-svc
@@ -235,6 +223,8 @@ spec:
     metadata:
       labels:
         app: like-svc
+        app.kubernetes.io/name: like-svc
+        metrics_group: like-svc
     spec:
       containers:
         - name: like-svc
@@ -271,6 +261,8 @@ kind: Service
 metadata:
   name: like-svc
   namespace: fanout
+  labels:
+    app: like-svc
 spec:
   selector:
     app: like-svc
@@ -278,117 +270,6 @@ spec:
     - name: http
       port: 8086
       targetPort: 8086
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: cadvisor
-  namespace: fanout
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: cadvisor
-  template:
-    metadata:
-      labels:
-        app: cadvisor
-    spec:
-      containers:
-        - name: cadvisor
-          image: gcr.io/cadvisor/cadvisor:latest
-          ports:
-            - containerPort: 8080
-          securityContext:
-            privileged: true
-          volumeMounts:
-            - name: rootfs
-              mountPath: /rootfs
-              readOnly: true
-            - name: var-run
-              mountPath: /var/run
-              readOnly: true
-            - name: sys
-              mountPath: /sys
-              readOnly: true
-            - name: docker
-              mountPath: /var/lib/docker
-              readOnly: true
-      volumes:
-        - name: rootfs
-          hostPath:
-            path: /
-        - name: var-run
-          hostPath:
-            path: /var/run
-        - name: sys
-          hostPath:
-            path: /sys
-        - name: docker
-          hostPath:
-            path: /var/lib/docker
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: cadvisor
-  namespace: fanout
-spec:
-  selector:
-    app: cadvisor
-  ports:
-    - name: http
-      port: 8080
-      targetPort: 8080
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: prometheus
-  namespace: fanout
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: prometheus
-  template:
-    metadata:
-      labels:
-        app: prometheus
-    spec:
-      containers:
-        - name: prometheus
-          image: prom/prometheus:latest
-          args:
-            - --config.file=/etc/prometheus/prometheus.yml
-            - --storage.tsdb.path=/prometheus
-          ports:
-            - containerPort: 9090
-          volumeMounts:
-            - name: config
-              mountPath: /etc/prometheus/prometheus.yml
-              subPath: prometheus.yml
-            - name: data
-              mountPath: /prometheus
-      volumes:
-        - name: config
-          configMap:
-            name: prometheus-config
-        - name: data
-          emptyDir: {}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: prometheus
-  namespace: fanout
-spec:
-  selector:
-    app: prometheus
-  ports:
-    - name: http
-      port: 9090
-      targetPort: 9090
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -438,6 +319,54 @@ spec:
       port: 11434
       targetPort: 11434
 ---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: feed-svc
+  namespace: monitoring
+  labels:
+    release: kube-prom-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - fanout
+  selector:
+    matchLabels:
+      app: feed-svc
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+  targetLabels:
+   - app
+  podTargetLabels:
+    - metrics_group
+    - app.kubernetes.io/name
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: like-svc
+  namespace: monitoring
+  labels:
+    release: kube-prom-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - fanout
+  selector:
+    matchLabels:
+      app: like-svc
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+  targetLabels:
+   - app
+  podTargetLabels:
+    - metrics_group
+    - app.kubernetes.io/name
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -459,6 +388,9 @@ rules:
   - apiGroups: ["argoproj.io"]
     resources: ["workflows", "workflowtemplates"]
     verbs: ["get", "list", "watch", "create"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflowtaskresults"]
+    verbs: ["create", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -509,19 +441,59 @@ spec:
             set -eu
             until curl -sf http://feed-svc:8080/ready; do echo waiting feed; sleep 3; done
             until curl -sf http://like-svc:8086/ready; do echo waiting like; sleep 3; done
-            until curl -sf http://prometheus:9090/-/ready; do echo waiting prometheus; sleep 3; done
+            until curl -sf http://kube-prom-stack-kube-prome-prometheus.monitoring.svc:9090/-/ready; do echo waiting prometheus; sleep 3; done
             until curl -sf http://ollama:11434/api/tags >/dev/null; do echo waiting ollama; sleep 5; done
 
     - name: seed-data
       script:
-        image: "{{workflow.parameters.fill-image}}"
+        image: alpine:3.19
         command: [sh]
         source: |
-          set -eu
-          for i in $(seq 1 200); do
-            curl -sf -X POST http://like-svc:8086/api/v1/like/$i >/dev/null || true
+          set -eux
+          
+          apk add --no-cache curl jq
+          
+          API_URL="http://feed-svc:8080"
+          NUM_USERS=16
+          POSTS_PER_USER=16
+          
+          echo "Starting subscription process..."
+          for i in $(seq 1 $NUM_USERS); do
+          for j in $(seq 1 $NUM_USERS); do
+          if [ "$i" -eq "$j" ]; then continue; fi
+          curl -s -X POST "$API_URL/subscribe" \
+          -H "X-User-Id: $i" \
+          -H "Content-Type: application/json" \
+          -d "{\"user_id\": $j}" > /dev/null
           done
-          echo "Seed step finished"
+          echo "User $i subscribed to all others."
+          done
+          
+          echo "Starting post creation..."
+          for i in $(seq 1 $NUM_USERS); do
+          for p in $(seq 1 $POSTS_PER_USER); do
+          curl -s -X POST "$API_URL/post" \
+          -H "X-User-Id: $i" \
+          -H "Content-Type: application/json" \
+          -d "{\"text\": \"Post #$p from User #$i\"}" > /dev/null
+          done
+          echo "User $i created $POSTS_PER_USER posts."
+          done
+          
+          echo "Starting like process..."
+          for i in $(seq 1 $NUM_USERS); do
+          FEED=$(curl -s "$API_URL/feed?count=2000" -H "X-User-Id: $i")
+          POST_IDS=$(echo "$FEED" | jq -r '.[].postId')
+          
+          for pid in $POST_IDS; do
+          curl -s -X POST "$API_URL/like" \
+          -H "X-User-Id: $i" \
+          -H "Content-Type: application/json" \
+          -d "{\"postId\": $pid}" > /dev/null
+          done
+          done
+          
+          echo "Done!"
 
     - name: run-assistant
       container:
@@ -531,7 +503,7 @@ spec:
           - name: service_url
             value: http://feed-svc:8080
           - name: prometheus_url
-            value: http://prometheus:9090
+            value: http://kube-prom-stack-kube-prome-prometheus.monitoring.svc:9090
           - name: ollama_url
             value: http://ollama:11434
           - name: duration
