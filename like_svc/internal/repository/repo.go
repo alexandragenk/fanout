@@ -36,10 +36,17 @@ func (r *LikeRepo) Unlike(ctx context.Context, userID, postID int) error {
 	return err
 }
 
-func (r *LikeRepo) GetLikeCount(ctx context.Context, postID int) (int, error) {
-	var count int
-	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM likes WHERE post_id = $1", postID).Scan(&count)
-	return count, err
+func (r *LikeRepo) GetLikesCount(ctx context.Context, postIDs []int) (map[int]int, error) {
+	counts := make(map[int]int)
+	for _, id := range postIDs {
+		var count int
+		err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM likes WHERE post_id = $1", id).Scan(&count)
+		if err != nil {
+			return nil, err
+		}
+		counts[id] = count
+	}
+	return counts, nil
 }
 
 func (r *LikeRepo) Close() error {

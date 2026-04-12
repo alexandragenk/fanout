@@ -27,15 +27,7 @@ func (s *LikeService) Unlike(ctx context.Context, userID, postID int) error {
 }
 
 func (s *LikeService) GetLikesCount(ctx context.Context, postIDs []int) (map[int]int, error) {
-	counts := make(map[int]int)
-	for _, id := range postIDs {
-		count, err := s.repo.GetLikeCount(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		counts[id] = count
-	}
-	return counts, nil
+	return s.repo.GetLikesCount(ctx, postIDs)
 }
 
 func (s *LikeService) Check(ctx context.Context) error {
