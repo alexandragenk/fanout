@@ -503,6 +503,29 @@ printf "%s\n" "$html_report" > "$HTML_REPORT_FILE"
 echo "$report"
 echo "HTML report saved to $HTML_REPORT_FILE"
 echo "Open report: $HTML_REPORT_FILE"
-if [[ -n "${HOSTNAME:-}" ]]; then
-  echo "Copy report locally: kubectl cp fanout/${HOSTNAME}:${HTML_REPORT_FILE} ./final-report.html"
-fi
+cat <<'EOF'
+To download the HTML report after the workflow pod has completed, use a temporary helper pod with the shared PVC:
+
+kubectl apply -n fanout -f - <<'YAML'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fanout-report-reader
+spec:
+  restartPolicy: Never
+  containers:
+    - name: reader
+      image: alpine:3.19
+      command: ["sh", "-c", "sleep 600"]
+      volumeMounts:
+        - name: reports
+          mountPath: /data
+  volumes:
+    - name: reports
+      persistentVolumeClaim:
+        claimName: fanout-metrics-pvc
+YAML
+
+kubectl cp fanout/fanout-report-reader:/data/final-report.html ./final-report.html
+kubectl delete pod -n fanout fanout-report-reader
+EOF

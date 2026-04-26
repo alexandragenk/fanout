@@ -127,6 +127,17 @@ argo logs -n fanout @latest
 kubectl logs -n fanout <workflow-pod-name>
 ```
 
+Встроенный artifact repository в chart включён по умолчанию. Если он успешно поднимется и workflow-controller подхватит default artifact repository из namespace `fanout`, шаги workflow будут публиковать артефакты.
+
+Шаг `compare-and-analyze` публикует:
+
+- `final-report-text`
+- `final-report-html`
+
+как `outputs.artifacts`. Тогда их можно открывать прямо из UI Argo Workflows на ноде сравнения без временного helper pod.
+
+Шаги `run-baseline` и `run-candidate` также публикуют промежуточные JSON-отчёты как artifacts из `run-assistant-collect`.
+
 ## 7. Что я бы улучшил дальше
 
 - заменить `emptyDir` у Prometheus на PVC;

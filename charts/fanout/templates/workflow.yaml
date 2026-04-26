@@ -236,6 +236,10 @@ spec:
       inputs:
         parameters:
           - name: report-file
+      outputs:
+        artifacts:
+          - name: metrics-report
+            path: "{{`{{inputs.parameters.report-file}}`}}"
       container:
         image: "{{`{{workflow.parameters.assistant-image}}`}}"
         imagePullPolicy: {{ .Values.workflow.assistantImage.pullPolicy }}
@@ -295,6 +299,12 @@ spec:
             kubectl rollout status deployment/like-svc --timeout=180s
 
     - name: compare-and-analyze
+      outputs:
+        artifacts:
+          - name: final-report-text
+            path: /data/final-report.txt
+          - name: final-report-html
+            path: /data/final-report.html
       container:
         image: "{{`{{workflow.parameters.assistant-image}}`}}"
         imagePullPolicy: {{ .Values.workflow.assistantImage.pullPolicy }}

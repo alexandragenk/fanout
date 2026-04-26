@@ -63,6 +63,33 @@ observability:
     releaseLabel: kube-prom-stack
     interval: 15s
 
+artifactRepository:
+  enabled: true
+  useDefaultConfigMap: true
+  configMapName: artifact-repositories
+  configKey: default-v1
+  secretName: argo-artifacts-credentials
+  s3:
+    bucket: argo-workflows
+    endpoint: argo-artifacts:9000
+    insecure: true
+    accessKey: admin
+    secretKey: changeit123
+  minio:
+    enabled: true
+    serviceName: argo-artifacts
+    image:
+      repository: minio/minio
+      tag: latest
+      pullPolicy: IfNotPresent
+    dataPath: /data
+    storage:
+      enabled: true
+      size: 5Gi
+    service:
+      apiPort: 9000
+      consolePort: 9001
+
 workflow:
   enabled: true
   metricsPvc:
