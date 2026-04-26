@@ -11,7 +11,7 @@ spec:
   source:
     repoURL: https://github.com/alexandragenk/fanout.git
     targetRevision: test
-    path: k8s
+    path: charts/fanout
   destination:
     server: https://kubernetes.default.svc
     namespace: fanout

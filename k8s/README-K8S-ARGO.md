@@ -1,6 +1,8 @@
 # Fanout в Kubernetes + Argo Workflows
 
-В `fanout-all-in-one.yaml` также добавлен `Argo CD Application` с `metadata.namespace: argocd`. Это важно: сам объект `Application` должен жить в namespace `argocd`, тогда он будет виден в UI Argo CD, даже если целевой namespace развёртывания приложения — `fanout`.
+В каталоге `k8s/` теперь есть и раздельные манифесты, и сохранённый `fanout-all-in-one.yaml`. Основной путь дальше — использовать раздельные файлы: их проще читать, синкать через Argo CD и изменять по частям.
+
+Также рядом добавлен Helm chart в [charts/fanout](/home/alexandra/Desktop/fanout/charts/fanout). Теперь это основной источник манифестов для Argo CD UI: `Application` должен смотреть именно на chart, а не на каталог `k8s/`.
 
 Ниже — минимальный рабочий набор манифестов для переноса репозитория `alexandragenk/fanout` в Kubernetes и запуска нагрузочного теста через Argo Workflows.
 
@@ -36,6 +38,8 @@ kubectl apply -f 04-observability.yaml
 kubectl apply -f 05-argo-workflow.yaml
 ```
 
+Если вы хотите завести `Application` в Argo CD, используйте объект `Application` из [fanout-all-in-one.yaml](/home/alexandra/Desktop/fanout/k8s/fanout-all-in-one.yaml) или создайте отдельный Argo CD манифест по тем же параметрам `repoURL`, `targetRevision` и `path: charts/fanout`.
+
 ## 1. Сборка и публикация образов
 
 Из корня репозитория:
@@ -48,12 +52,7 @@ docker push <REGISTRY>/fanout-feed-svc:<TAG>
 docker push <REGISTRY>/fanout-like-svc:<TAG>
 ```
 
-Потом откройте файл `03-apps.yaml` и замените:
-
-- `REPLACE_ME_FEED_IMAGE`
-- `REPLACE_ME_LIKE_IMAGE`
-
-на реальные имена образов.
+Потом откройте файл `03-apps.yaml` и при необходимости замените текущие `image` у `feed-svc` и `like-svc` на свои реальные имена образов и теги.
 
 ## 2. Подготовка Argo Workflows
 
@@ -89,16 +88,15 @@ kubectl logs -n fanout deploy/feed-svc
 kubectl logs -n fanout deploy/like-svc
 ```
 
-Если вы используете Argo CD, проверьте `spec.source.repoURL` и `spec.source.targetRevision` в [fanout-all-in-one.yaml](/home/alexandra/Desktop/fanout/k8s/fanout-all-in-one.yaml): сейчас указаны `https://github.com/alexandragenk/fanout.git` и ветка `test`, потому что каталог `k8s` есть именно в этой ветке. Если у вас fork, другой remote или вы перенесёте `k8s` в `master`/`main`, замените эти значения на свои. После этого объект `Application` `fanout` будет виден в UI Argo CD, потому что он создаётся в namespace `argocd`, а синхронизирует ресурсы в namespace `fanout`.
+Если вы используете Argo CD, проверьте `Application` в [fanout-all-in-one.yaml](/home/alexandra/Desktop/fanout/k8s/fanout-all-in-one.yaml): сейчас он смотрит на `repoURL: https://github.com/alexandragenk/fanout.git`, `targetRevision: test`, `path: charts/fanout`. Это значит, что Argo CD UI и все runtime-ресурсы, включая `WorkflowTemplate`, должны приходить из Helm chart. Если у вас fork, другой remote или другая ветка, замените эти значения на свои. Сам объект `Application` должен жить в namespace `argocd`, тогда он будет виден в UI Argo CD, даже если целевой namespace развёртывания приложения — `fanout`.
 
 ## 4. Запуск workflow
 
 ```bash
-kubectl apply -f 05-argo-workflow.yaml
 argo submit -n fanout --from workflowtemplate/fanout-perftest --watch
 ```
 
-Если CLI `argo` нет, можно создать Workflow из шаблона обычным YAML.
+При использовании Argo CD отдельно применять `WorkflowTemplate` не нужно: он уже должен быть создан из chart `charts/fanout`. Достаточно дождаться sync приложения `fanout`, а затем запускать `argo submit`.
 
 ## 5. Что делает workflow
 
@@ -109,7 +107,7 @@ Workflow состоит из шагов:
 3. `collect-metrics` — забирает значения из Prometheus API.
 4. `analyze-with-ollama` — отправляет собранные метрики в Ollama и получает текстовый отчёт.
 
-Набор PromQL-запросов для шага сбора метрик вынесен в `ConfigMap` `promql-queries-config`, k6-сценарий в `ConfigMap` `k6-scripts-config`, а LLM-prompts в `ConfigMap` `llm-prompts-config` в манифесте [fanout-all-in-one.yaml](/home/alexandra/Desktop/fanout/k8s/fanout-all-in-one.yaml). Чтобы поменять состав метрик, сам нагрузочный сценарий или формулировку анализа, достаточно обновить `data.queries.txt`, `data.load_k6_feed.js`, `data.analysis-prompt.txt` или `data.comparison-prompt.txt` и заново применить манифест без пересборки образа `perftest-ai-assistant`.
+Набор PromQL-запросов для шага сбора метрик вынесен в `ConfigMap` `promql-queries-config`, k6-сценарий в `ConfigMap` `k6-scripts-config`, а LLM-prompts в `ConfigMap` `llm-prompts-config` в [01-configmaps.yaml](/home/alexandra/Desktop/fanout/k8s/01-configmaps.yaml). Чтобы поменять состав метрик, сам нагрузочный сценарий или формулировку анализа, достаточно обновить `data.queries.txt`, `data.load_k6_feed.js`, `data.analysis-prompt.txt` или `data.comparison-prompt.txt` и заново применить `01-configmaps.yaml` без пересборки образа `perftest-ai-assistant`.
 
 ## 6. Как посмотреть результаты
 
