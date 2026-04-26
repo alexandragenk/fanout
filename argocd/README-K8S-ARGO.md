@@ -13,7 +13,7 @@
 - В `like_svc_cfg.yaml` сервис лайков слушает `:8086` и использует БД `like-db:5432`.
 - В `prometheus.yml` настроены scrape targets для `feed-svc:8080`, `like-svc:8086` и `cadvisor:8080`.
 - В `perftest-ai-assistant/load_k6_feed.js` тест вызывает `GET /feed` и передаёт заголовок `X-User-Id`.
-- В `perftest-ai-assistant/config.sh` и `run_stress.sh` используются локальные URL (`localhost`) и docker-compose-имена контейнеров (`fanout-feed-svc-1` и т.п.), поэтому для Kubernetes они были адаптированы.
+- В `perftest-ai-assistant/config.sh` и `run_stress_collect.sh` используются параметры окружения и cluster-local адреса, поэтому сценарий работает внутри Kubernetes без отдельного локального stress-runner.
 
 ## Важные допущения
 

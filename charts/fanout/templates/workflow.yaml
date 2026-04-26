@@ -323,4 +323,6 @@ spec:
             value: /data/new-report.json
           - name: REPORT_FILE
             value: /data/final-report.txt
+          - name: HTML_REPORT_FILE
+            value: /data/final-report.html
 {{- end }}
