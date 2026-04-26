@@ -1,6 +1,24 @@
 # Apply with: kubectl apply -f fanout-all-in-one.yaml
 # Then replace image placeholders in this file before apply.
 ---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fanout
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/alexandragenk/fanout.git
+    targetRevision: test
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: fanout
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+---
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -28,6 +46,113 @@ data:
     run_address: ":8086"
     database_uri: "postgres://postgres:postgres@like-db:5432/like_svc?sslmode=disable"
     migrations_path: "file://migrations"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promql-queries-config
+  namespace: fanout
+data:
+  queries.txt: |
+    sum(rate(http_request_duration_seconds_count{route='feed'}[$duration]))
+    sum(rate(http_request_duration_seconds_count{route='likes'}[$duration]))
+    histogram_quantile(0.50,sum(rate(http_request_duration_seconds_bucket{route='feed'}[$duration])) by (le))
+    histogram_quantile(0.95,sum(rate(http_request_duration_seconds_bucket{route='feed'}[$duration])) by (le))
+    histogram_quantile(0.99,sum(rate(http_request_duration_seconds_bucket{route='feed'}[$duration])) by (le))
+    max_over_time(http_request_duration_seconds_sum{route='feed'}[$duration]) / max_over_time(http_request_duration_seconds_count{route='feed'}[$duration])
+    histogram_quantile(0.50,sum(rate(http_request_duration_seconds_bucket{route='likes'}[$duration])) by (le))
+    histogram_quantile(0.95,sum(rate(http_request_duration_seconds_bucket{route='likes'}[$duration])) by (le))
+    histogram_quantile(0.99,sum(rate(http_request_duration_seconds_bucket{route='likes'}[$duration])) by (le))
+    max_over_time(http_request_duration_seconds_sum{route='likes'}[$duration]) / max_over_time(http_request_duration_seconds_count{route='likes'}[$duration])
+    (sum(rate(http_responses_group_total{route='feed',group='5xx'}[$duration])) or vector(0)) / clamp_min(sum(rate(http_responses_group_total{route='feed'}[$duration])), 1e-9)
+    (sum(rate(http_responses_group_total{route='likes',group='5xx'}[$duration])) or vector(0)) / clamp_min(sum(rate(http_responses_group_total{route='likes'}[$duration])), 1e-9)
+    rate(container_cpu_usage_seconds_total{pod=~'feed-svc-.*',cpu='total'}[$duration])
+    rate(container_cpu_usage_seconds_total{pod=~'like-svc-.*',cpu='total'}[$duration])
+    rate(container_cpu_usage_seconds_total{pod=~'feed-db-.*',cpu='total'}[$duration])
+    rate(container_cpu_usage_seconds_total{pod=~'like-db-.*',cpu='total'}[$duration])
+    avg_over_time(container_memory_working_set_bytes{pod=~'feed-svc-.*'}[$duration])
+    avg_over_time(container_memory_working_set_bytes{pod=~'like-svc-.*'}[$duration])
+    avg_over_time(container_memory_working_set_bytes{pod=~'feed-db-.*'}[$duration])
+    avg_over_time(container_memory_working_set_bytes{pod=~'like-db-.*'}[$duration])
+    sum(rate(container_fs_reads_total{pod=~'feed-db-.*'}[$duration]))
+    sum(rate(container_fs_writes_total{pod=~'feed-db-.*'}[$duration]))
+    sum(rate(container_fs_reads_total{pod=~'like-db-.*'}[$duration]))
+    sum(rate(container_fs_writes_total{pod=~'like-db-.*'}[$duration]))
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-scripts-config
+  namespace: fanout
+data:
+  load_k6_feed.js: |
+    import http from 'k6/http';
+
+    export const options = {
+        stages: [
+            { duration: '2m', target: 50 }
+        ],
+    };
+
+    const base_url = __ENV.service_url || 'http://localhost:8080';
+
+    export default function () {
+        http.get(base_url + '/feed', {
+            headers: {
+                'X-User-Id': String(__VU),
+            },
+        });
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-prompts-config
+  namespace: fanout
+data:
+  analysis-prompt.txt: |
+    Проведен стресс-тест сервиса лент.
+    Он использует сервис лайков.
+
+    Ниже приведены метрики k6:
+    {{K6_OUTPUT}}
+
+    Ниже приведены метрики Prometheus по обоим сервисам, базам данных и ресурсам контейнеров:
+    {{PROMETHEUS_METRICS}}
+
+    Проанализируй результаты:
+    1. Найди аномалии.
+    2. Предложи возможные причины.
+    3. Сделай краткий вывод.
+    4. Отдельно укажи, если метрики выглядят невалидными из-за отсутствия нагрузки, NaN или нулевых значений.
+  comparison-prompt.txt: |
+    Проведено два нагрузочных запуска распределённого приложения.
+
+    Ниже приведён вывод k6 первого запуска baseline:
+    {{BASELINE_K6}}
+
+    Ниже приведён вывод k6 второго запуска candidate:
+    {{CANDIDATE_K6}}
+
+    Ниже приведено численное сравнение Prometheus-метрик.
+    Это основной источник истины для сравнения baseline и candidate:
+
+    {{COMPARISON_LINES}}
+
+    Топ-5 метрик с наибольшим ростом:
+    {{TOP_REGRESSIONS}}
+
+    Топ-5 метрик с наибольшим снижением:
+    {{TOP_IMPROVEMENTS}}
+
+    Нужно:
+    1. Оценить k6 baseline и k6 candidate.
+    2. Сравнить именно Prometheus-метрики из списка выше, ссылаясь на конкретные query и числа.
+    3. Найти деградации и улучшения.
+    4. Указать наиболее вероятные узкие места.
+    5. Если какие-то diff близки к нулю, считать их несущественными и не делать на них сильных выводов.
+    6. Сделать краткий итоговый вывод.
+    7. Не писать, что числовые метрики отсутствуют: они приведены выше в явном виде.
 ---
 apiVersion: v1
 kind: Service
@@ -368,6 +493,18 @@ spec:
     - app.kubernetes.io/name
 ---
 apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fanout-metrics-pvc
+  namespace: fanout
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Mi
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: argo-workflow
@@ -384,7 +521,7 @@ rules:
     verbs: ["get", "list", "watch", "create", "delete"]
   - apiGroups: ["apps"]
     resources: ["deployments", "statefulsets"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "create", "delete", "patch"]
   - apiGroups: ["argoproj.io"]
     resources: ["workflows", "workflowtemplates"]
     verbs: ["get", "list", "watch", "create"]
@@ -413,24 +550,108 @@ metadata:
 spec:
   serviceAccountName: argo-workflow
   entrypoint: main
+  volumes:
+    - name: metrics-storage
+      persistentVolumeClaim:
+        claimName: fanout-metrics-pvc
+    - name: promql-config
+      configMap:
+        name: promql-queries-config
+    - name: k6-scripts-config
+      configMap:
+        name: k6-scripts-config
+    - name: llm-prompts-config
+      configMap:
+        name: llm-prompts-config
   arguments:
     parameters:
       - name: assistant-image
         value: akalashnikova7/k6:latest
       - name: fill-image
         value: curlimages/curl:8.7.1
+      - name: feed-image
+        value: akalashnikova7/fanout-feed:latest
+      - name: like-image
+        value: akalashnikova7/fanout-like:latest
+      - name: new-feed-image
+        value: akalashnikova7/fanout-feed:test
+      - name: new-like-image
+        value: akalashnikova7/fanout-like:test
+      - name: service-url
+        value: http://feed-svc:8080
+      - name: prometheus-url
+        value: http://kube-prom-stack-kube-prome-prometheus.monitoring.svc:9090
+      - name: ollama-url
+        value: http://ollama:11434
+      - name: duration
+        value: 2m
+      - name: collect-script
+        value: ./run_stress_collect.sh
+      - name: compare-script
+        value: ./compare_and_analyze.sh
+      - name: promql-queries-file
+        value: /config/queries.txt
+      - name: k6-script-file
+        value: /config-k6/load_k6_feed.js
+      - name: analysis-prompt-file
+        value: /config-prompts/analysis-prompt.txt
+      - name: comparison-prompt-file
+        value: /config-prompts/comparison-prompt.txt
+
   templates:
     - name: main
       dag:
         tasks:
+          - name: deploy-main-version
+            template: deploy
+            arguments:
+              parameters:
+                - name: feed-image
+                  value: "{{workflow.parameters.feed-image}}"
+                - name: like-image
+                  value: "{{workflow.parameters.like-image}}"
+
           - name: wait-services
             template: wait-services
-          - name: seed-data
+            dependencies: [deploy-main-version]
+
+          #- name: seed-data
+          #  dependencies: [wait-services]
+          #  template: seed-data
+
+          - name: run-baseline
             dependencies: [wait-services]
-            template: seed-data
-          - name: run-assistant
-            dependencies: [seed-data]
-            template: run-assistant
+            template: run-assistant-collect
+            arguments:
+              parameters:
+                - name: report-file
+                  value: /data/old-report.json
+
+          - name: deploy-new-version
+            dependencies: [run-baseline]
+            template: deploy
+            arguments:
+              parameters:
+                - name: feed-image
+                  value: "{{workflow.parameters.new-feed-image}}"
+                - name: like-image
+                  value: "{{workflow.parameters.new-like-image}}"
+
+          - name: wait-services-new
+            dependencies: [deploy-new-version]
+            template: wait-services
+
+          - name: run-candidate
+            dependencies: [wait-services-new]
+            template: run-assistant-collect
+            arguments:
+              parameters:
+                - name: report-file
+                  value: /data/new-report.json
+
+          - name: compare-reports
+            dependencies: [run-candidate]
+            template: compare-and-analyze
 
     - name: wait-services
       container:
@@ -440,9 +661,13 @@ spec:
           - |
             set -eu
             until curl -sf http://feed-svc:8080/ready; do echo waiting feed; sleep 3; done
+            echo "feed-svc readiness check passed"
             until curl -sf http://like-svc:8086/ready; do echo waiting like; sleep 3; done
+            echo "like-svc readiness check passed"
             until curl -sf http://kube-prom-stack-kube-prome-prometheus.monitoring.svc:9090/-/ready; do echo waiting prometheus; sleep 3; done
+            echo "prometheus readiness check passed"
             until curl -sf http://ollama:11434/api/tags >/dev/null; do echo waiting ollama; sleep 5; done
+            echo "ollama readiness check passed"
 
     - name: seed-data
       script:
@@ -450,61 +675,139 @@ spec:
         command: [sh]
         source: |
           set -eux
-          
+
           apk add --no-cache curl jq
-          
+
           API_URL="http://feed-svc:8080"
           NUM_USERS=16
           POSTS_PER_USER=16
-          
+
           echo "Starting subscription process..."
           for i in $(seq 1 $NUM_USERS); do
-          for j in $(seq 1 $NUM_USERS); do
-          if [ "$i" -eq "$j" ]; then continue; fi
-          curl -s -X POST "$API_URL/subscribe" \
-          -H "X-User-Id: $i" \
-          -H "Content-Type: application/json" \
-          -d "{\"user_id\": $j}" > /dev/null
+            for j in $(seq 1 $NUM_USERS); do
+              if [ "$i" -eq "$j" ]; then continue; fi
+              curl -s -X POST "$API_URL/subscribe" \
+                -H "X-User-Id: $i" \
+                -H "Content-Type: application/json" \
+                -d "{\"user_id\": $j}" > /dev/null
+            done
+            echo "User $i subscribed to all others."
           done
-          echo "User $i subscribed to all others."
-          done
-          
+
           echo "Starting post creation..."
           for i in $(seq 1 $NUM_USERS); do
-          for p in $(seq 1 $POSTS_PER_USER); do
-          curl -s -X POST "$API_URL/post" \
-          -H "X-User-Id: $i" \
-          -H "Content-Type: application/json" \
-          -d "{\"text\": \"Post #$p from User #$i\"}" > /dev/null
+            for p in $(seq 1 $POSTS_PER_USER); do
+              curl -s -X POST "$API_URL/post" \
+                -H "X-User-Id: $i" \
+                -H "Content-Type: application/json" \
+                -d "{\"text\": \"Post #$p from User #$i\"}" > /dev/null
+            done
+            echo "User $i created $POSTS_PER_USER posts."
           done
-          echo "User $i created $POSTS_PER_USER posts."
-          done
-          
+
           echo "Starting like process..."
           for i in $(seq 1 $NUM_USERS); do
-          FEED=$(curl -s "$API_URL/feed?count=2000" -H "X-User-Id: $i")
-          POST_IDS=$(echo "$FEED" | jq -r '.[].postId')
-          
-          for pid in $POST_IDS; do
-          curl -s -X POST "$API_URL/like" \
-          -H "X-User-Id: $i" \
-          -H "Content-Type: application/json" \
-          -d "{\"postId\": $pid}" > /dev/null
+            FEED=$(curl -s "$API_URL/feed?count=2000" -H "X-User-Id: $i")
+            POST_IDS=$(echo "$FEED" | jq -r '.[].postId')
+
+            for pid in $POST_IDS; do
+              curl -s -X POST "$API_URL/like" \
+                -H "X-User-Id: $i" \
+                -H "Content-Type: application/json" \
+                -d "{\"postId\": $pid}" > /dev/null
+            done
           done
-          done
-          
+
           echo "Done!"
 
-    - name: run-assistant
+    - name: run-assistant-collect
+      inputs:
+        parameters:
+          - name: report-file
       container:
         image: "{{workflow.parameters.assistant-image}}"
         imagePullPolicy: Always
+        command: [bash, -lc]
+        args:
+          - |
+            set -euo pipefail
+            echo "Starting collect-only assistant step"
+            echo "REPORT_FILE=$REPORT_FILE"
+            "{{workflow.parameters.collect-script}}"
+        volumeMounts:
+          - name: metrics-storage
+            mountPath: /data
+          - name: promql-config
+            mountPath: /config
+          - name: k6-scripts-config
+            mountPath: /config-k6
+          - name: llm-prompts-config
+            mountPath: /config-prompts
         env:
           - name: service_url
-            value: http://feed-svc:8080
+            value: "{{workflow.parameters.service-url}}"
           - name: prometheus_url
-            value: http://kube-prom-stack-kube-prome-prometheus.monitoring.svc:9090
+            value: "{{workflow.parameters.prometheus-url}}"
           - name: ollama_url
-            value: http://ollama:11434
+            value: "{{workflow.parameters.ollama-url}}"
           - name: duration
-            value: 2m
+            value: "{{workflow.parameters.duration}}"
+          - name: PROMQL_QUERIES_FILE
+            value: "{{workflow.parameters.promql-queries-file}}"
+          - name: K6_SCRIPT_FILE
+            value: "{{workflow.parameters.k6-script-file}}"
+          - name: ANALYSIS_PROMPT_FILE
+            value: "{{workflow.parameters.analysis-prompt-file}}"
+          - name: REPORT_FILE
+            value: "{{inputs.parameters.report-file}}"
+
+    - name: deploy
+      inputs:
+        parameters:
+          - name: feed-image
+          - name: like-image
+      container:
+        image: bitnami/kubectl:latest
+        command: [sh, -c]
+        args:
+          - |
+            set -eux
+
+            kubectl set image deployment/feed-svc \
+              feed-svc={{inputs.parameters.feed-image}}
+
+            kubectl set image deployment/like-svc \
+              like-svc={{inputs.parameters.like-image}}
+
+            kubectl rollout status deployment/feed-svc --timeout=180s
+            kubectl rollout status deployment/like-svc --timeout=180s
+
+    - name: compare-and-analyze
+      container:
+        image: "{{workflow.parameters.assistant-image}}"
+        imagePullPolicy: Always
+        command: [bash, -lc]
+        args:
+          - |
+            set -euo pipefail
+            echo "Starting final compare-and-analyze step"
+            echo "BASELINE_FILE=$BASELINE_FILE"
+            echo "CANDIDATE_FILE=$CANDIDATE_FILE"
+            echo "REPORT_FILE=$REPORT_FILE"
+            "{{workflow.parameters.compare-script}}"
+        volumeMounts:
+          - name: metrics-storage
+            mountPath: /data
+          - name: llm-prompts-config
+            mountPath: /config-prompts
+        env:
+          - name: ollama_url
+            value: "{{workflow.parameters.ollama-url}}"
+          - name: COMPARISON_PROMPT_FILE
+            value: "{{workflow.parameters.comparison-prompt-file}}"
+          - name: BASELINE_FILE
+            value: /data/old-report.json
+          - name: CANDIDATE_FILE
+            value: /data/new-report.json
+          - name: REPORT_FILE
+            value: /data/final-report.txt

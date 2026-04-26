@@ -1,5 +1,7 @@
 # Fanout в Kubernetes + Argo Workflows
 
+В `fanout-all-in-one.yaml` также добавлен `Argo CD Application` с `metadata.namespace: argocd`. Это важно: сам объект `Application` должен жить в namespace `argocd`, тогда он будет виден в UI Argo CD, даже если целевой namespace развёртывания приложения — `fanout`.
+
 Ниже — минимальный рабочий набор манифестов для переноса репозитория `alexandragenk/fanout` в Kubernetes и запуска нагрузочного теста через Argo Workflows.
 
 ## Что учтено из репозитория
@@ -87,6 +89,8 @@ kubectl logs -n fanout deploy/feed-svc
 kubectl logs -n fanout deploy/like-svc
 ```
 
+Если вы используете Argo CD, проверьте `spec.source.repoURL` и `spec.source.targetRevision` в [fanout-all-in-one.yaml](/home/alexandra/Desktop/fanout/k8s/fanout-all-in-one.yaml): сейчас указаны `https://github.com/alexandragenk/fanout.git` и ветка `test`, потому что каталог `k8s` есть именно в этой ветке. Если у вас fork, другой remote или вы перенесёте `k8s` в `master`/`main`, замените эти значения на свои. После этого объект `Application` `fanout` будет виден в UI Argo CD, потому что он создаётся в namespace `argocd`, а синхронизирует ресурсы в namespace `fanout`.
+
 ## 4. Запуск workflow
 
 ```bash
@@ -104,6 +108,8 @@ Workflow состоит из шагов:
 2. `run-k6` — выполняет k6-сценарий по `/feed`.
 3. `collect-metrics` — забирает значения из Prometheus API.
 4. `analyze-with-ollama` — отправляет собранные метрики в Ollama и получает текстовый отчёт.
+
+Набор PromQL-запросов для шага сбора метрик вынесен в `ConfigMap` `promql-queries-config`, k6-сценарий в `ConfigMap` `k6-scripts-config`, а LLM-prompts в `ConfigMap` `llm-prompts-config` в манифесте [fanout-all-in-one.yaml](/home/alexandra/Desktop/fanout/k8s/fanout-all-in-one.yaml). Чтобы поменять состав метрик, сам нагрузочный сценарий или формулировку анализа, достаточно обновить `data.queries.txt`, `data.load_k6_feed.js`, `data.analysis-prompt.txt` или `data.comparison-prompt.txt` и заново применить манифест без пересборки образа `perftest-ai-assistant`.
 
 ## 6. Как посмотреть результаты
 

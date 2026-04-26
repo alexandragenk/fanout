@@ -4,12 +4,13 @@ USER root
 
 RUN apk add --no-cache curl jq bash
 
-WORKDIR /app
+WORKDIR /
 
-COPY run_stress.sh config.sh load_k6_feed.js ./
+COPY run_stress_collect.sh config.sh load_k6_feed.js compare_and_analyze.sh queries.txt ./
+COPY prompts ./prompts
 
-RUN chmod +x run_stress.sh
+RUN chmod +x run_stress_collect.sh compare_and_analyze.sh
 
 ENTRYPOINT []
 
-CMD ["./run_stress.sh"]
+CMD ["./run_stress_collect.sh"]

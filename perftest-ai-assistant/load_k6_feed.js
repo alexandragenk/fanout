@@ -1,8 +1,9 @@
 import http from 'k6/http';
 
 export const options = {
-    vus: 16,
-    duration: '1m',
+    stages: [
+        { duration: '2m', target: 50 }
+    ],
 };
 
 const base_url = __ENV.service_url || 'http://localhost:8080';
