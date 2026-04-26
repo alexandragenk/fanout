@@ -1,8 +1,8 @@
 # Fanout в Kubernetes + Argo Workflows
 
-В каталоге `k8s/` теперь есть и раздельные манифесты, и сохранённый `fanout-all-in-one.yaml`. Основной путь дальше — использовать раздельные файлы: их проще читать, синкать через Argo CD и изменять по частям.
+В каталоге `k8s/` теперь есть раздельные манифесты, а `fanout-all-in-one.yaml` оставлен только как legacy reference. Для новых развёртываний его больше не используем.
 
-Также рядом добавлен Helm chart в [charts/fanout](/home/alexandra/Desktop/fanout/charts/fanout). Теперь это основной источник манифестов для Argo CD UI: `Application` должен смотреть именно на chart, а не на каталог `k8s/`.
+Также рядом добавлен Helm chart в [charts/fanout](/home/alexandra/Desktop/fanout/charts/fanout). Это основной источник манифестов для Argo CD UI: `Application` должен смотреть именно на chart, а не на каталог `k8s/`.
 
 Ниже — минимальный рабочий набор манифестов для переноса репозитория `alexandragenk/fanout` в Kubernetes и запуска нагрузочного теста через Argo Workflows.
 
@@ -38,7 +38,11 @@ kubectl apply -f 04-observability.yaml
 kubectl apply -f 05-argo-workflow.yaml
 ```
 
-Если вы хотите завести `Application` в Argo CD, используйте объект `Application` из [fanout-all-in-one.yaml](/home/alexandra/Desktop/fanout/k8s/fanout-all-in-one.yaml) или создайте отдельный Argo CD манифест по тем же параметрам `repoURL`, `targetRevision` и `path: charts/fanout`.
+Для Argo CD используйте отдельный манифест [argocd/fanout-application.yaml](/home/alexandra/Desktop/fanout/argocd/fanout-application.yaml):
+
+```bash
+kubectl apply -n argocd -f ../argocd/fanout-application.yaml
+```
 
 ## 1. Сборка и публикация образов
 
@@ -88,12 +92,12 @@ kubectl logs -n fanout deploy/feed-svc
 kubectl logs -n fanout deploy/like-svc
 ```
 
-Если вы используете Argo CD, проверьте `Application` в [fanout-all-in-one.yaml](/home/alexandra/Desktop/fanout/k8s/fanout-all-in-one.yaml): сейчас он смотрит на `repoURL: https://github.com/alexandragenk/fanout.git`, `targetRevision: test`, `path: charts/fanout`. Это значит, что Argo CD UI и все runtime-ресурсы, включая `WorkflowTemplate`, должны приходить из Helm chart. Если у вас fork, другой remote или другая ветка, замените эти значения на свои. Сам объект `Application` должен жить в namespace `argocd`, тогда он будет виден в UI Argo CD, даже если целевой namespace развёртывания приложения — `fanout`.
+Если вы используете Argo CD, проверьте [argocd/fanout-application.yaml](/home/alexandra/Desktop/fanout/argocd/fanout-application.yaml): сейчас там указаны `repoURL: https://github.com/alexandragenk/fanout.git`, `targetRevision: test`, `path: charts/fanout`. Это значит, что Argo CD UI и все runtime-ресурсы, включая `WorkflowTemplate`, должны приходить из Helm chart. Если у вас fork, другой remote или другая ветка, замените эти значения на свои. Сам объект `Application` должен жить в namespace `argocd`, тогда он будет виден в UI Argo CD, даже если целевой namespace развёртывания приложения — `fanout`.
 
 ## 4. Запуск workflow
 
 ```bash
-argo submit -n fanout --from workflowtemplate/fanout-perftest --watch
+argo submit -n fanout --from workflowtemplate/fanout-perftest-pipeline --watch
 ```
 
 При использовании Argo CD отдельно применять `WorkflowTemplate` не нужно: он уже должен быть создан из chart `charts/fanout`. Достаточно дождаться sync приложения `fanout`, а затем запускать `argo submit`.
