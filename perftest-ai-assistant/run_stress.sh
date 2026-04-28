@@ -30,7 +30,7 @@ queries=(
 )
 
 prom_query () {
-  curl -sG "$prometheus_url/api/v1/query" --data-urlencode "query=$1" | jq '.data.result[0].value[1] | tonumber | (. * 100 | round / 100)'
+  curl -sG "$prometheus_url/api/v1/query" --data-urlencode "query=$1" | jq -r '.data.result[0].value[1] | try (tonumber | (. * 100 | round / 100)) catch "NaN"'
 }
 
 prom_query_range () {
