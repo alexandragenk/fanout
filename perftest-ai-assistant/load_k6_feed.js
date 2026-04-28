@@ -9,9 +9,12 @@ export const options = {
 const base_url = __ENV.service_url || 'http://localhost:8080';
 
 export default function () {
-    http.get(base_url + '/feed', {
+    const res = http.get(base_url + '/feed', {
         headers: {
             'X-User-Id': String(__VU),
         },
     });
+    if (res.status !== 200) {
+        console.warn(`HTTP error, status: ${res.status}, body: ${res.body}`);
+    }
 }

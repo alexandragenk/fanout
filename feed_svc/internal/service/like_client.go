@@ -7,6 +7,7 @@ import (
 	"feed_svc/internal/config"
 	"feed_svc/internal/model"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -47,7 +48,11 @@ func (c *LikeHTTPClient) GetLikes(ctx context.Context, postIDs []int) (map[int]i
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("like service returned status %d", resp.StatusCode)
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("like service returned status %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var likes map[int]int

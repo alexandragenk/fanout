@@ -27,21 +27,14 @@
 
 ## Структура файлов
 
-Применяйте в таком порядке:
+Основной источник манифестов Helm chart:
 
-```bash
-kubectl apply -f 00-namespace.yaml
-kubectl apply -f 01-configmaps.yaml
-kubectl apply -f 02-postgres.yaml
-kubectl apply -f 03-apps.yaml
-kubectl apply -f 04-observability.yaml
-kubectl apply -f 05-argo-workflow.yaml
-```
+- [charts/fanout](/home/alexandra/Desktop/fanout/charts/fanout)
 
 Для Argo CD используйте отдельный манифест [argocd/fanout-application.yaml](/home/alexandra/Desktop/fanout/argocd/fanout-application.yaml):
 
 ```bash
-kubectl apply -n argocd -f ../argocd/fanout-application.yaml
+kubectl apply -n argocd -f argocd/fanout-application.yaml
 ```
 
 ## 1. Сборка и публикация образов
@@ -56,7 +49,7 @@ docker push <REGISTRY>/fanout-feed-svc:<TAG>
 docker push <REGISTRY>/fanout-like-svc:<TAG>
 ```
 
-Потом откройте файл `03-apps.yaml` и при необходимости замените текущие `image` у `feed-svc` и `like-svc` на свои реальные имена образов и теги.
+Потом при необходимости обновите образы и теги в [charts/fanout/values.yaml](/home/alexandra/Desktop/fanout/charts/fanout/values.yaml).
 
 ## 2. Подготовка Argo Workflows
 
@@ -75,12 +68,16 @@ kubectl get pods -n argo
 
 ## 3. Развёртывание приложения
 
+Для обычного Helm-деплоя:
+
 ```bash
-kubectl apply -f 00-namespace.yaml
-kubectl apply -f 01-configmaps.yaml
-kubectl apply -f 02-postgres.yaml
-kubectl apply -f 03-apps.yaml
-kubectl apply -f 04-observability.yaml
+helm upgrade --install fanout ./charts/fanout -n fanout --create-namespace
+```
+
+Для Argo CD:
+
+```bash
+kubectl apply -n argocd -f argocd/fanout-application.yaml
 ```
 
 Проверка:
@@ -111,7 +108,7 @@ Workflow состоит из шагов:
 3. `collect-metrics` — забирает значения из Prometheus API.
 4. `analyze-with-ollama` — отправляет собранные метрики в Ollama и получает текстовый отчёт.
 
-Набор PromQL-запросов для шага сбора метрик вынесен в `ConfigMap` `promql-queries-config`, k6-сценарий в `ConfigMap` `k6-scripts-config`, а LLM-prompts в `ConfigMap` `llm-prompts-config` в [01-configmaps.yaml](/home/alexandra/Desktop/fanout/k8s/01-configmaps.yaml). Чтобы поменять состав метрик, сам нагрузочный сценарий или формулировку анализа, достаточно обновить `data.queries.txt`, `data.load_k6_feed.js`, `data.analysis-prompt.txt` или `data.comparison-prompt.txt` и заново применить `01-configmaps.yaml` без пересборки образа `perftest-ai-assistant`.
+Набор PromQL-запросов для шага сбора метрик, k6-сценарий и LLM-prompts рендерятся chart'ом в `ConfigMap`-ы `promql-queries-config`, `k6-scripts-config` и `llm-prompts-config` из [charts/fanout/values.yaml](/home/alexandra/Desktop/fanout/charts/fanout/values.yaml) и [charts/fanout/templates/configmaps.yaml](/home/alexandra/Desktop/fanout/charts/fanout/templates/configmaps.yaml). Чтобы поменять состав метрик, сам нагрузочный сценарий или формулировку анализа, достаточно обновить `promqlQueries`, `k6Script`, `analysisPrompt` или `comparisonPrompt` в `values.yaml` и пересинкать приложение без пересборки образа `perftest-ai-assistant`.
 
 ## 6. Как посмотреть результаты
 
