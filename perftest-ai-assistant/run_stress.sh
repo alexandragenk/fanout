@@ -30,11 +30,11 @@ queries=(
 )
 
 prom_query () {
-  curl -sG "$prometheus_url/api/v1/query" --data-urlencode "query=$1" | jq -r '.data.result[0].value[1] // "NaN"'
+  curl -sG "$prometheus_url/api/v1/query" --data-urlencode "query=$1" | jq '.data.result[0].value[1] | tonumber | (. * 100 | round / 100)'
 }
 
 prom_query_range () {
-  curl -sG "$prometheus_url/api/v1/query_range?start=$start&end=$end&step=15" --data-urlencode "query=$1" | jq -c '.data.result[0].values'
+  curl -sG "$prometheus_url/api/v1/query_range?start=$start&end=$end&step=15" --data-urlencode "query=$1" | jq -c '.data.result[0].values // []'
 }
 
 export date=`date -u`
@@ -46,9 +46,9 @@ end=$(date +%s)
 
 metrics_agg=""
 for q in "${queries[@]}"; do
-  q_max="round(max_over_time($q[$duration:]),0.01)"
+  q_max="max_over_time($q[$duration:])"
   metrics_agg+="$q_max: $(prom_query $q_max)"$'\n'
-  q_avg="round(avg_over_time($q[$duration:]),0.01)"
+  q_avg="avg_over_time($q[$duration:])"
   metrics_agg+="$q_avg: $(prom_query $q_avg)"$'\n'
 done
 

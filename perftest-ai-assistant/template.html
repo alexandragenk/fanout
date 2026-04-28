@@ -48,26 +48,16 @@
     }));
 
     for (const [key, values] of Object.entries(testMetrix)) {
-        if (!values) {
-            continue;
-        }
-        
         const timestamps = values.map(v => v[0]);
-        const testValues = values.map(v => v[1] === "NaN" ? null : parseFloat(v[1]));
+        const testValues = values.map(v => v[1]);
 
-        const data = [timestamps, /* ethalonValues, */ testValues];
+        const data = [timestamps, testValues];
 
         const opts = {
             width: 500,
             height: 200,
             series: [
-                {},
-                // {
-                //     label: "Ethalon",
-                //     stroke: "#437132",
-                //     width: 2,
-                // },
-                {
+                {}, {
                     label: "Value",
                     stroke: "#306d8c",
                     width: 2,
