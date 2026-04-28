@@ -48,6 +48,10 @@
     }));
 
     for (const [key, values] of Object.entries(testMetrix)) {
+        if (!values) {
+            continue;
+        }
+        
         const timestamps = values.map(v => v[0]);
         const testValues = values.map(v => v[1] === "NaN" ? null : parseFloat(v[1]));
 
