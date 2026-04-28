@@ -22,9 +22,9 @@ func (w *statusWriter) WriteHeader(code int) {
 func Metrics(next http.Handler) http.Handler {
 	httpDuration := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "http_request_duration_seconds",
-			Help:    "HTTP request duration in seconds",
-			Buckets: prometheus.DefBuckets,
+			Name:    "http_request_duration_ms",
+			Help:    "HTTP request duration in ms",
+			Buckets: []float64{1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000},
 		},
 		[]string{"route"},
 	)
@@ -41,8 +41,8 @@ func Metrics(next http.Handler) http.Handler {
 		writer := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		start := time.Now()
 		next.ServeHTTP(writer, r)
-		duration := time.Since(start).Seconds()
-		httpDuration.WithLabelValues(route).Observe(duration)
+		duration := time.Since(start).Milliseconds()
+		httpDuration.WithLabelValues(route).Observe(float64(duration))
 		httpResponseGroups.WithLabelValues(route, fmt.Sprintf("%dxx", writer.status/100)).Inc()
 	})
 }
