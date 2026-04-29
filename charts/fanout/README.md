@@ -49,6 +49,8 @@ argocdApplication:
 - `ConfigMap` `artifact-repositories` в namespace workflow
 - опциональный in-cluster `MinIO`
 
+Для совместимости с `argo-server`, работающим в другом namespace, endpoint S3 должен быть задан полным DNS-именем Kubernetes сервиса, например `argo-artifacts.fanout.svc.cluster.local:9000`, а не коротким `argo-artifacts:9000`.
+
 После этого `outputs.artifacts` из workflow смогут публиковаться в Argo UI, если workflow-controller читает default artifact repository из namespace workflow.
 
 По умолчанию как артефакты публикуются:

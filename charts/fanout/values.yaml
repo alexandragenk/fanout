@@ -71,7 +71,7 @@ artifactRepository:
   secretName: argo-artifacts-credentials
   s3:
     bucket: argo-workflows
-    endpoint: argo-artifacts:9000
+    endpoint: argo-artifacts.fanout.svc.cluster.local:9000
     insecure: true
     accessKey: admin
     secretKey: changeit123
