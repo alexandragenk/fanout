@@ -35,20 +35,20 @@ comparison=$(jq -n \
   --argjson candidate "$candidate" \
   '
   {
-    baseline_metrics_count: ($baseline.prometheus_metrics | length),
-    candidate_metrics_count: ($candidate.prometheus_metrics | length),
+    baseline_metrics_count: ($baseline.metrics_agg | length),
+    candidate_metrics_count: ($candidate.metrics_agg | length),
     comparison: [
-      $baseline.prometheus_metrics
+      $baseline.metrics_agg
       | keys[]
       | . as $key
       | {
           query: $key,
-          baseline: ($baseline.prometheus_metrics[$key]),
-          candidate: ($candidate.prometheus_metrics[$key]),
+          baseline: ($baseline.metrics_agg[$key].avg),
+          candidate: ($candidate.metrics_agg[$key].avg),
           diff: (
-            (($candidate.prometheus_metrics[$key] | tonumber?) // null)
+            (($candidate.metrics_agg[$key].avg | tonumber?) // null)
             -
-            (($baseline.prometheus_metrics[$key] | tonumber?) // null)
+            (($baseline.metrics_agg[$key].avg | tonumber?) // null)
           )
         }
     ]
@@ -81,15 +81,15 @@ top_improvements=$(jq -r '
 baseline_k6=$(jq -r '.k6_output' <<< "$baseline")
 candidate_k6=$(jq -r '.k6_output' <<< "$candidate")
 baseline_metrics=$(jq -r '
-  .prometheus_metrics
+  .metrics_agg
   | to_entries
-  | map("\(.key): \(.value)")
+  | map("\(.key): avg=\(.value.avg), max=\(.value.max)")
   | join("\n")
 ' <<< "$baseline")
 candidate_metrics=$(jq -r '
-  .prometheus_metrics
+  .metrics_agg
   | to_entries
-  | map("\(.key): \(.value)")
+  | map("\(.key): avg=\(.value.avg), max=\(.value.max)")
   | join("\n")
 ' <<< "$candidate")
 
