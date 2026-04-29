@@ -56,6 +56,11 @@ metadata:
   namespace: {{ include "fanout.namespace" . }}
 spec:
   serviceAccountName: {{ .Values.workflow.serviceAccount.name }}
+{{- if and .Values.artifactRepository.enabled .Values.artifactRepository.useDefaultConfigMap }}
+  artifactRepositoryRef:
+    configMap: {{ .Values.artifactRepository.configMapName }}
+    key: {{ .Values.artifactRepository.configKey }}
+{{- end }}
   entrypoint: main
   volumes:
     - name: metrics-storage

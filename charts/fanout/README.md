@@ -46,12 +46,12 @@ argocdApplication:
 Встроенный artifact repository для Argo Workflows включён по умолчанию. Chart создаст:
 
 - `Secret` с access/secret key
-- `ConfigMap` `artifact-repositories` в namespace workflow
+- `ConfigMap` `artifact-repositories` в namespace релиза, по умолчанию `fanout`
 - опциональный in-cluster `MinIO`
 
 Для совместимости с `argo-server`, работающим в другом namespace, endpoint S3 должен быть задан полным DNS-именем Kubernetes сервиса, например `argo-artifacts.fanout.svc.cluster.local:9000`, а не коротким `argo-artifacts:9000`.
 
-После этого `outputs.artifacts` из workflow смогут публиковаться в Argo UI, если workflow-controller читает default artifact repository из namespace workflow.
+`WorkflowTemplate` также явно ссылается на этот `artifact-repositories/default-v1`, поэтому артефакты должны публиковаться именно в репозиторий, созданный этим chart, а не в внешний default repo `workflow-controller`.
 
 По умолчанию как артефакты публикуются:
 
