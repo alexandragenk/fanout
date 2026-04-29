@@ -28,15 +28,6 @@ if [[ ! -f "$HTML_TEMPLATE_FILE" ]]; then
   exit 1
 fi
 
-html_escape() {
-  printf '%s' "$1" | sed \
-    -e 's/&/\&amp;/g' \
-    -e 's/</\&lt;/g' \
-    -e 's/>/\&gt;/g' \
-    -e 's/"/\&quot;/g' \
-    -e "s/'/\&#39;/g"
-}
-
 baseline=$(cat "$BASELINE_FILE")
 candidate=$(cat "$CANDIDATE_FILE")
 
@@ -180,18 +171,35 @@ candidate_metrics_text_json=$(jq -Rs . <<< "$candidate_metrics")
 baseline_file_json=$(jq -Rn --arg v "$BASELINE_FILE" '$v')
 candidate_file_json=$(jq -Rn --arg v "$CANDIDATE_FILE" '$v')
 
-html_report="${template_html//__REPORT_DATE__/$(html_escape "$generated_at")}"
-html_report="${html_report//__SUMMARY_JSON__/$summary_json_compact}"
-html_report="${html_report//__COMPARISON_JSON__/$comparison_json_compact}"
-html_report="${html_report//__BASELINE_METRICS_JSON__/$baseline_metrics_json}"
-html_report="${html_report//__CANDIDATE_METRICS_JSON__/$candidate_metrics_json}"
-html_report="${html_report//__ANALYSIS_JSON__/$analysis_json}"
-html_report="${html_report//__BASELINE_K6_JSON__/$baseline_k6_json}"
-html_report="${html_report//__CANDIDATE_K6_JSON__/$candidate_k6_json}"
-html_report="${html_report//__BASELINE_METRICS_TEXT_JSON__/$baseline_metrics_text_json}"
-html_report="${html_report//__CANDIDATE_METRICS_TEXT_JSON__/$candidate_metrics_text_json}"
-html_report="${html_report//__BASELINE_FILE_JSON__/$baseline_file_json}"
-html_report="${html_report//__CANDIDATE_FILE_JSON__/$candidate_file_json}"
+html_report=$(jq -rRn \
+  --arg template "$template_html" \
+  --arg report_date "$generated_at" \
+  --arg summary_json "$summary_json_compact" \
+  --arg comparison_json "$comparison_json_compact" \
+  --arg baseline_metrics_json "$baseline_metrics_json" \
+  --arg candidate_metrics_json "$candidate_metrics_json" \
+  --arg analysis_json "$analysis_json" \
+  --arg baseline_k6_json "$baseline_k6_json" \
+  --arg candidate_k6_json "$candidate_k6_json" \
+  --arg baseline_metrics_text_json "$baseline_metrics_text_json" \
+  --arg candidate_metrics_text_json "$candidate_metrics_text_json" \
+  --arg baseline_file_json "$baseline_file_json" \
+  --arg candidate_file_json "$candidate_file_json" \
+  '
+  $template
+  | gsub("__REPORT_DATE__"; $report_date)
+  | gsub("__SUMMARY_JSON__"; $summary_json)
+  | gsub("__COMPARISON_JSON__"; $comparison_json)
+  | gsub("__BASELINE_METRICS_JSON__"; $baseline_metrics_json)
+  | gsub("__CANDIDATE_METRICS_JSON__"; $candidate_metrics_json)
+  | gsub("__ANALYSIS_JSON__"; $analysis_json)
+  | gsub("__BASELINE_K6_JSON__"; $baseline_k6_json)
+  | gsub("__CANDIDATE_K6_JSON__"; $candidate_k6_json)
+  | gsub("__BASELINE_METRICS_TEXT_JSON__"; $baseline_metrics_text_json)
+  | gsub("__CANDIDATE_METRICS_TEXT_JSON__"; $candidate_metrics_text_json)
+  | gsub("__BASELINE_FILE_JSON__"; $baseline_file_json)
+  | gsub("__CANDIDATE_FILE_JSON__"; $candidate_file_json)
+  ')
 
 printf "%s\n" "$html_report" > "$HTML_REPORT_FILE"
 
