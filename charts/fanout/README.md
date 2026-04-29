@@ -57,3 +57,9 @@ argocdApplication:
 
 - промежуточные `old-report.json` и `new-report.json` из `run-assistant-collect`
 - финальные `final-report.txt` и `final-report.html` из `compare-and-analyze`
+
+Длительность нагрузочного теста задаётся одним параметром:
+
+- `workflow.duration` в `values.yaml`
+
+Это значение используется и для окна Prometheus-запросов, и для `k6` через переменную окружения `duration`.

@@ -1,8 +1,10 @@
 import http from 'k6/http';
 
+const testDuration = __ENV.duration || '2m';
+
 export const options = {
     stages: [
-        { duration: '2m', target: 50 }
+        { duration: testDuration, target: 50 }
     ],
 };
 

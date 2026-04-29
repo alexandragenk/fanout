@@ -43,7 +43,14 @@ metrics_agg_json="{}"
 prom_query() {
   curl -sG "$prometheus_url/api/v1/query" \
     --data-urlencode "query=$1" \
-    | jq -r '.data.result[0].value[1] | try (tonumber | (. * 100 | round / 100)) catch "NaN"'
+    | jq -c '
+        .data.result[0].value[1]?
+        | if . == null or . == "NaN" then
+            null
+          else
+            (tonumber | (. * 100 | round / 100))
+          end
+      '
 }
 
 prom_query_range() {
@@ -52,7 +59,19 @@ prom_query_range() {
     --data-urlencode "start=$start" \
     --data-urlencode "end=$end" \
     --data-urlencode "step=15" \
-    | jq -c '.data.result[0].values // []'
+    | jq -c '
+        (.data.result[0].values // [])
+        | map([
+            .[0],
+            (
+              if .[1] == null or .[1] == "NaN" then
+                null
+              else
+                (.[1] | tonumber)
+              end
+            )
+          ])
+      '
 }
 
 for q in "${queries[@]}"; do
@@ -64,8 +83,8 @@ for q in "${queries[@]}"; do
 
   metrics_agg_json=$(jq \
     --arg query "$rendered_q" \
-    --arg max "$(prom_query "$q_max")" \
-    --arg avg "$(prom_query "$q_avg")" \
+    --argjson max "$(prom_query "$q_max")" \
+    --argjson avg "$(prom_query "$q_avg")" \
     '. + {($query): {max: $max, avg: $avg}}' <<< "$metrics_agg_json")
 
   metrics_json=$(jq \
