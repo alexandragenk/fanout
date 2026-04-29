@@ -143,6 +143,8 @@ spec:
               parameters:
                 - name: report-file
                   value: /data/old-report.json
+                - name: artifact-key
+                  value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/old-report.json"
 
           - name: deploy-new-version
             dependencies: [run-baseline]
@@ -169,6 +171,8 @@ spec:
               parameters:
                 - name: report-file
                   value: /data/new-report.json
+                - name: artifact-key
+                  value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/new-report.json"
 
           - name: compare-reports
             dependencies: [run-candidate]
@@ -255,10 +259,15 @@ spec:
       inputs:
         parameters:
           - name: report-file
+          - name: artifact-key
       outputs:
         artifacts:
           - name: metrics-report
             path: "{{`{{inputs.parameters.report-file}}`}}"
+            archive:
+              none: {}
+            s3:
+              key: "{{`{{inputs.parameters.artifact-key}}`}}"
       container:
         image: "{{`{{workflow.parameters.assistant-image}}`}}"
         imagePullPolicy: {{ .Values.workflow.assistantImage.pullPolicy }}
@@ -322,8 +331,16 @@ spec:
         artifacts:
           - name: final-report-text
             path: /data/final-report.txt
+            archive:
+              none: {}
+            s3:
+              key: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/final-report.txt"
           - name: final-report-html
             path: /data/final-report.html
+            archive:
+              none: {}
+            s3:
+              key: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/final-report.html"
       container:
         image: "{{`{{workflow.parameters.assistant-image}}`}}"
         imagePullPolicy: {{ .Values.workflow.assistantImage.pullPolicy }}
