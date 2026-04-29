@@ -56,9 +56,13 @@ comparison=$(jq -n \
           baseline: ($baseline.metrics_agg[$key].avg),
           candidate: ($candidate.metrics_agg[$key].avg),
           diff: (
-            (($candidate.metrics_agg[$key].avg | tonumber?) // null)
-            -
-            (($baseline.metrics_agg[$key].avg | tonumber?) // null)
+            (($candidate.metrics_agg[$key].avg | tonumber?) as $candidate_avg
+            | ($baseline.metrics_agg[$key].avg | tonumber?) as $baseline_avg
+            | if $candidate_avg == null or $baseline_avg == null then
+                null
+              else
+                ($candidate_avg - $baseline_avg)
+              end)
           )
         }
     ]

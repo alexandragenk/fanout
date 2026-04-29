@@ -75,20 +75,18 @@ prom_query_range() {
 }
 
 for q in "${queries[@]}"; do
-  rendered_q="${q//\$duration/$duration}"
-
-  q_max="max_over_time(($rendered_q)[$duration:])"
-  q_avg="avg_over_time(($rendered_q)[$duration:])"
-  q_series=$(prom_query_range "$rendered_q")
+  q_max="max_over_time(($q)[$duration:])"
+  q_avg="avg_over_time(($q)[$duration:])"
+  q_series=$(prom_query_range "$q")
 
   metrics_agg_json=$(jq \
-    --arg query "$rendered_q" \
+    --arg query "$q" \
     --argjson max "$(prom_query "$q_max")" \
     --argjson avg "$(prom_query "$q_avg")" \
     '. + {($query): {max: $max, avg: $avg}}' <<< "$metrics_agg_json")
 
   metrics_json=$(jq \
-    --arg query "$rendered_q" \
+    --arg query "$q" \
     --argjson values "$q_series" \
     '. + {($query): $values}' <<< "$metrics_json")
 done

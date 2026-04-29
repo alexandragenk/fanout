@@ -3,9 +3,8 @@ import http from 'k6/http';
 const testDuration = __ENV.duration || '2m';
 
 export const options = {
-    stages: [
-        { duration: testDuration, target: 50 }
-    ],
+    vus: 50,
+    duration: testDuration,
 };
 
 const base_url = __ENV.service_url || 'http://localhost:8080';

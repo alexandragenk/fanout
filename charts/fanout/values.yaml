@@ -138,30 +138,30 @@ workflow:
     postsPerUser: 16
 
 promqlQueries: |
-  sum(rate(http_request_duration_ms_count{route='feed'}[$duration]))
-  sum(rate(http_request_duration_ms_count{route='likes'}[$duration]))
-  histogram_quantile(0.50,sum(rate(http_request_duration_ms_bucket{route='feed'}[$duration]))by(le))
-  histogram_quantile(0.95,sum(rate(http_request_duration_ms_bucket{route='feed'}[$duration]))by(le))
-  histogram_quantile(0.99,sum(rate(http_request_duration_ms_bucket{route='feed'}[$duration]))by(le))
-  ((sum(rate(http_request_duration_ms_sum{route='feed'}[$duration]))/sum(rate(http_request_duration_ms_count{route='feed'}[$duration])))>=0)
-  histogram_quantile(0.50,sum(rate(http_request_duration_ms_bucket{route='likes'}[$duration]))by(le))
-  histogram_quantile(0.95,sum(rate(http_request_duration_ms_bucket{route='likes'}[$duration]))by(le))
-  histogram_quantile(0.99,sum(rate(http_request_duration_ms_bucket{route='likes'}[$duration]))by(le))
-  ((sum(rate(http_request_duration_ms_sum{route='likes'}[$duration]))/sum(rate(http_request_duration_ms_count{route='likes'}[$duration])))>=0)
-  (100*(sum(rate(http_responses_group_total{route='feed',group='5xx'}[$duration]))/sum(rate(http_responses_group_total{route='feed'}[$duration])))>=0)
-  (100*(sum(rate(http_responses_group_total{route='likes',group='5xx'}[$duration]))/sum(rate(http_responses_group_total{route='likes'}[$duration])))>=0)
-  sum(rate(container_fs_reads_total{pod=~'feed-db-.*'}[$duration]))
-  sum(rate(container_fs_writes_total{pod=~'feed-db-.*'}[$duration]))
-  sum(rate(container_fs_reads_total{pod=~'like-db-.*'}[$duration]))
-  sum(rate(container_fs_writes_total{pod=~'like-db-.*'}[$duration]))
+  sum(rate(http_request_duration_ms_count{route='feed'}[1m]))
+  sum(rate(http_request_duration_ms_count{route='likes'}[1m]))
+  histogram_quantile(0.50,sum(rate(http_request_duration_ms_bucket{route='feed'}[1m]))by(le))
+  histogram_quantile(0.95,sum(rate(http_request_duration_ms_bucket{route='feed'}[1m]))by(le))
+  histogram_quantile(0.99,sum(rate(http_request_duration_ms_bucket{route='feed'}[1m]))by(le))
+  ((sum(rate(http_request_duration_ms_sum{route='feed'}[1m]))/sum(rate(http_request_duration_ms_count{route='feed'}[1m])))>=0)
+  histogram_quantile(0.50,sum(rate(http_request_duration_ms_bucket{route='likes'}[1m]))by(le))
+  histogram_quantile(0.95,sum(rate(http_request_duration_ms_bucket{route='likes'}[1m]))by(le))
+  histogram_quantile(0.99,sum(rate(http_request_duration_ms_bucket{route='likes'}[1m]))by(le))
+  ((sum(rate(http_request_duration_ms_sum{route='likes'}[1m]))/sum(rate(http_request_duration_ms_count{route='likes'}[1m])))>=0)
+  (100*(sum(rate(http_responses_group_total{route='feed',group='5xx'}[1m]))/sum(rate(http_responses_group_total{route='feed'}[1m])))>=0)
+  (100*(sum(rate(http_responses_group_total{route='likes',group='5xx'}[1m]))/sum(rate(http_responses_group_total{route='likes'}[1m])))>=0)
+  sum(rate(container_fs_reads_total{pod=~'feed-db-.*'}[1m]))
+  sum(rate(container_fs_writes_total{pod=~'feed-db-.*'}[1m]))
+  sum(rate(container_fs_reads_total{pod=~'like-db-.*'}[1m]))
+  sum(rate(container_fs_writes_total{pod=~'like-db-.*'}[1m]))
   (container_memory_usage_bytes{pod=~'feed-svc-.*'}/1048576)
   (container_memory_usage_bytes{pod=~'like-svc-.*'}/1048576)
   (container_memory_usage_bytes{pod=~'feed-db-.*'}/1048576)
   (container_memory_usage_bytes{pod=~'like-db-.*'}/1048576)
-  rate(container_cpu_usage_seconds_total{pod=~'feed-svc-.*',cpu='total'}[$duration])
-  rate(container_cpu_usage_seconds_total{pod=~'like-svc-.*',cpu='total'}[$duration])
-  rate(container_cpu_usage_seconds_total{pod=~'feed-db-.*',cpu='total'}[$duration])
-  rate(container_cpu_usage_seconds_total{pod=~'like-db-.*',cpu='total'}[$duration])
+  rate(container_cpu_usage_seconds_total{pod=~'feed-svc-.*',cpu='total'}[1m])
+  rate(container_cpu_usage_seconds_total{pod=~'like-svc-.*',cpu='total'}[1m])
+  rate(container_cpu_usage_seconds_total{pod=~'feed-db-.*',cpu='total'}[1m])
+  rate(container_cpu_usage_seconds_total{pod=~'like-db-.*',cpu='total'}[1m])
 
 k6Script: |
   import http from 'k6/http';
@@ -169,9 +169,8 @@ k6Script: |
   const testDuration = __ENV.duration || '2m';
 
   export const options = {
-      stages: [
-          { duration: testDuration, target: 50 }
-      ],
+      vus: 50,
+      duration: testDuration,
   };
 
   const base_url = __ENV.service_url || 'http://localhost:8080';
