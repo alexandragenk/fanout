@@ -10,7 +10,7 @@ feedService:
   port: 8080
   config:
     runAddress: ":8080"
-    databaseUri: "postgres://postgres:${POSTGRES_PASSWORD}@feed-db:5432/feed?sslmode=disable"
+    databaseUri: "postgres://postgres@feed-db:5432/feed?sslmode=disable"
     likeServiceUrl: "http://like-svc:8086"
     migrationsPath: "file://migrations"
   probes:
@@ -27,7 +27,7 @@ likeService:
   port: 8086
   config:
     runAddress: ":8086"
-    databaseUri: "postgres://postgres:${POSTGRES_PASSWORD}@like-db:5432/like?sslmode=disable"
+    databaseUri: "postgres://postgres@like-db:5432/like?sslmode=disable"
     migrationsPath: "file://migrations"
   probes:
     readinessInitialDelaySeconds: 10
@@ -42,6 +42,7 @@ postgres:
   user: postgres
   secretName: fanout-postgres-credentials
   passwordKey: password
+  storageClassName: ""
   feedDb:
     name: feed
     storage: 2Gi

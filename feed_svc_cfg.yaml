@@ -1,4 +1,0 @@
-run_address: ":8080"
-database_uri: "postgres://postgres@feed-db:5432/feed_svc?sslmode=disable"
-like_service_url: "http://like-svc:8086"
-migrations_path: "file://migrations"

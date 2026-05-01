@@ -41,6 +41,8 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.postgres.secretName }}
                   key: {{ .Values.postgres.passwordKey }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_DB
               value: {{ .Values.postgres.feedDb.name | quote }}
           readinessProbe:
@@ -56,9 +58,12 @@ spec:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
+{{- if .Values.postgres.storageClassName }}
+        storageClassName: {{ .Values.postgres.storageClassName | quote }}
+{{- end }}
         resources:
           requests:
-            storage: {{ .Values.postgres.feedDb.storage }}
+            storage: {{ .Values.postgres.feedDb.storage | quote }}
 ---
 apiVersion: v1
 kind: Service
@@ -103,6 +108,8 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.postgres.secretName }}
                   key: {{ .Values.postgres.passwordKey }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_DB
               value: {{ .Values.postgres.likeDb.name | quote }}
           readinessProbe:
@@ -118,6 +125,9 @@ spec:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
+{{- if .Values.postgres.storageClassName }}
+        storageClassName: {{ .Values.postgres.storageClassName | quote }}
+{{- end }}
         resources:
           requests:
-            storage: {{ .Values.postgres.likeDb.storage }}
+            storage: {{ .Values.postgres.likeDb.storage | quote }}

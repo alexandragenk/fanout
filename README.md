@@ -165,26 +165,7 @@ kubectl create secret generic argo-artifacts-credentials \
 kubectl apply -n argocd -f argocd/fanout-application.yaml
 ```
 
-После этого синхронизируйте приложение через Argo CD UI или через CLI:
-
-```bash
-argocd app sync fanout
-```
-
-Проверка runtime-ресурсов:
-
-```bash
-kubectl get pods -n fanout
-kubectl get svc -n fanout
-kubectl get workflowtemplate -n fanout
-kubectl get servicemonitor -n monitoring
-```
-
-Локальная проверка Helm chart:
-
-```bash
-helm template fanout ./helm-charts/fanout -n fanout
-```
+После этого синхронизируйте приложение через Argo CD UI и дождитесь старта всех ресурсов
 
 ## Запуск Performance Pipeline
 
@@ -194,12 +175,6 @@ helm template fanout ./helm-charts/fanout -n fanout
 argo submit -n fanout --from workflowtemplate/fanout-perftest-pipeline
 ```
 
-Наблюдение за выполнением:
-
-```bash
-argo list -n fanout
-argo watch -n fanout @latest
-```
 
 Pipeline выполняет шаги:
 
