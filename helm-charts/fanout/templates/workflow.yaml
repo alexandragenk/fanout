@@ -112,6 +112,12 @@ spec:
         value: {{ .Values.workflow.comparisonPromptFile | quote }}
       - name: html-template-file
         value: {{ .Values.workflow.htmlTemplateFile | quote }}
+      - name: seed-data-enabled
+        value: {{ .Values.workflow.seedData.enabled | quote }}
+      - name: seed-data-num-users
+        value: {{ .Values.workflow.seedData.numUsers | quote }}
+      - name: seed-data-posts-per-user
+        value: {{ .Values.workflow.seedData.postsPerUser | quote }}
 
   templates:
     - name: main
@@ -130,17 +136,13 @@ spec:
             template: wait-services
             dependencies: [deploy-main-version]
 
-{{- if .Values.workflow.seedData.enabled }}
           - name: seed-data
             dependencies: [wait-services]
             template: seed-data
+            when: "{{`{{workflow.parameters.seed-data-enabled}}`}} == true"
 
           - name: run-baseline
-            dependencies: [seed-data]
-{{- else }}
-          - name: run-baseline
-            dependencies: [wait-services]
-{{- end }}
+            depends: "seed-data.Succeeded || seed-data.Skipped"
             template: run-assistant-collect
             arguments:
               parameters:
@@ -217,8 +219,8 @@ spec:
           apk add --no-cache curl jq
 
           API_URL="http://feed-svc:{{ .Values.feedService.port }}"
-          NUM_USERS={{ .Values.workflow.seedData.numUsers }}
-          POSTS_PER_USER={{ .Values.workflow.seedData.postsPerUser }}
+          NUM_USERS="{{`{{workflow.parameters.seed-data-num-users}}`}}"
+          POSTS_PER_USER="{{`{{workflow.parameters.seed-data-posts-per-user}}`}}"
 
           echo "Starting subscription process..."
           for i in $(seq 1 $NUM_USERS); do

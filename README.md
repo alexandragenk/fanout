@@ -175,17 +175,32 @@ kubectl apply -n argocd -f argocd/fanout-application.yaml
 argo submit -n fanout --from workflowtemplate/fanout-perftest-pipeline
 ```
 
+При запуске из Argo Workflows UI параметры можно изменить прямо в форме запуска:
+
+- `seed-data-enabled` — включает шаг наполнения данных, по умолчанию `false`
+- `seed-data-num-users` — количество пользователей для seed-data
+- `seed-data-posts-per-user` — количество постов на пользователя
+
+Для запуска с seed-data через CLI:
+
+```bash
+argo submit -n fanout --from workflowtemplate/fanout-perftest-pipeline \
+  -p seed-data-enabled=true \
+  -p seed-data-num-users=16 \
+  -p seed-data-posts-per-user=16
+```
 
 Pipeline выполняет шаги:
 
 1. `deploy-main-version` — разворачивает baseline-образы
 2. `wait-services` — ждёт готовности сервисов, Prometheus и Ollama
-3. `run-baseline` — запускает k6 и собирает Prometheus-метрики
-4. `deploy-new-version` — разворачивает candidate-образы
-5. `wait-services-new`
-6. `cool-down-before-candidate`
-7. `run-candidate` — повторно запускает k6 и собирает метрики
-8. `compare-reports` — сравнивает baseline/candidate и отправляет данные в Ollama для анализа
+3. `seed-data` — опционально наполняет приложение данными, если `seed-data-enabled=true`
+4. `run-baseline` — запускает k6 и собирает Prometheus-метрики
+5. `deploy-new-version` — разворачивает candidate-образы
+6. `wait-services-new`
+7. `cool-down-before-candidate`
+8. `run-candidate` — повторно запускает k6 и собирает метрики
+9. `compare-reports` — сравнивает baseline/candidate и отправляет данные в Ollama для анализа
 
 ## Отчёты И Artifacts
 
