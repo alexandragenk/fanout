@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: feed-svc-config
+  name: feed-config
   namespace: {{ include "fanout.namespace" . }}
 data:
   config.yaml: |
@@ -13,7 +13,7 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: like-svc-config
+  name: like-config
   namespace: {{ include "fanout.namespace" . }}
 data:
   config.yaml: |
