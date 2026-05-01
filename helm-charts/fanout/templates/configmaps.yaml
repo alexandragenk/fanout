@@ -24,6 +24,17 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: assistant-scripts-config
+  namespace: {{ include "fanout.namespace" . }}
+data:
+  run_stress_collect.sh: |
+{{ .Files.Get "files/assistant/run_stress_collect.sh" | indent 4 }}
+  compare_and_analyze.sh: |
+{{ .Files.Get "files/assistant/compare_and_analyze.sh" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: promql-queries-config
   namespace: {{ include "fanout.namespace" . }}
 data:

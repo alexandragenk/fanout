@@ -256,4 +256,4 @@ JSON-отчёты содержат:
 - `k6Script` задаёт сценарий нагрузки
 - `comparisonPrompt` задаёт prompt-шаблон для LLM
 
-Prometheus-метрики собирает `perftest-ai-assistant/run_stress_collect.sh`. Сравнение и финальный отчёт генерирует `perftest-ai-assistant/compare_and_analyze.sh`.
+Prometheus-метрики собирает `helm-charts/fanout/files/assistant/run_stress_collect.sh`. Сравнение и финальный отчёт генерирует `helm-charts/fanout/files/assistant/compare_and_analyze.sh`. Эти скрипты монтируются в Workflow через ConfigMap `assistant-scripts-config`, поэтому после их изменения достаточно Argo CD sync; пересобирать Docker image ассистента не нужно.
