@@ -1,0 +1,183 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feed
+  namespace: {{ include "fanout.namespace" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: feed
+  template:
+    metadata:
+      labels:
+        app: feed
+        app.kubernetes.io/name: feed
+        metrics_group: feed
+    spec:
+      containers:
+        - name: feed
+          image: {{ printf "%s:%s" .Values.feedService.image.repository .Values.feedService.image.tag | quote }}
+          imagePullPolicy: {{ .Values.feedService.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.feedService.port }}
+          env:
+            - name: CONFIG_PATH
+              value: /app/config.yaml
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.secretName }}
+                  key: {{ .Values.postgres.passwordKey }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.feedService.port }}
+            initialDelaySeconds: {{ .Values.feedService.probes.readinessInitialDelaySeconds }}
+            periodSeconds: {{ .Values.feedService.probes.readinessPeriodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.feedService.port }}
+            initialDelaySeconds: {{ .Values.feedService.probes.livenessInitialDelaySeconds }}
+            periodSeconds: {{ .Values.feedService.probes.livenessPeriodSeconds }}
+      volumes:
+        - name: config
+          configMap:
+            name: feed-svc-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: feed-svc
+  namespace: {{ include "fanout.namespace" . }}
+  labels:
+    app: feed
+spec:
+  selector:
+    app: feed
+  ports:
+    - name: http
+      port: {{ .Values.feedService.port }}
+      targetPort: {{ .Values.feedService.port }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: like
+  namespace: {{ include "fanout.namespace" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: like
+  template:
+    metadata:
+      labels:
+        app: like
+        app.kubernetes.io/name: like
+        metrics_group: like
+    spec:
+      containers:
+        - name: like
+          image: {{ printf "%s:%s" .Values.likeService.image.repository .Values.likeService.image.tag | quote }}
+          imagePullPolicy: {{ .Values.likeService.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.likeService.port }}
+          env:
+            - name: CONFIG_PATH
+              value: /app/config.yaml
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.secretName }}
+                  key: {{ .Values.postgres.passwordKey }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.likeService.port }}
+            initialDelaySeconds: {{ .Values.likeService.probes.readinessInitialDelaySeconds }}
+            periodSeconds: {{ .Values.likeService.probes.readinessPeriodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.likeService.port }}
+            initialDelaySeconds: {{ .Values.likeService.probes.livenessInitialDelaySeconds }}
+            periodSeconds: {{ .Values.likeService.probes.livenessPeriodSeconds }}
+      volumes:
+        - name: config
+          configMap:
+            name: like-svc-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: like-svc
+  namespace: {{ include "fanout.namespace" . }}
+  labels:
+    app: like
+spec:
+  selector:
+    app: like
+  ports:
+    - name: http
+      port: {{ .Values.likeService.port }}
+      targetPort: {{ .Values.likeService.port }}
+{{- if .Values.ollama.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: {{ include "fanout.namespace" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      containers:
+        - name: ollama
+          image: {{ printf "%s:%s" .Values.ollama.image.repository .Values.ollama.image.tag | quote }}
+          ports:
+            - containerPort: {{ .Values.ollama.port }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              ollama serve &
+              sleep 5
+              ollama pull {{ .Values.ollama.model }}
+              ollama cp {{ .Values.ollama.model }} default || true
+              wait
+          volumeMounts:
+            - name: ollama-data
+              mountPath: /root/.ollama
+      volumes:
+        - name: ollama-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: {{ include "fanout.namespace" . }}
+spec:
+  selector:
+    app: ollama
+  ports:
+    - name: http
+      port: {{ .Values.ollama.port }}
+      targetPort: {{ .Values.ollama.port }}
+{{- end }}

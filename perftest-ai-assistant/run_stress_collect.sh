@@ -1,15 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-. config.sh
+: "${service_url:?service_url env var is required}"
+: "${prometheus_url:?prometheus_url env var is required}"
+: "${duration:?duration env var is required}"
 
-REPORT_FILE="${REPORT_FILE:-/data/report.json}"
-QUERIES_FILE="${PROMQL_QUERIES_FILE:-/config/queries.txt}"
-K6_SCRIPT_FILE="${K6_SCRIPT_FILE:-/config-k6/load_k6_feed.js}"
-
-if [[ ! -f "$K6_SCRIPT_FILE" && -f /load_k6_feed.js ]]; then
-  K6_SCRIPT_FILE=/load_k6_feed.js
-fi
+REPORT_FILE="${REPORT_FILE:?REPORT_FILE env var is required}"
+QUERIES_FILE="${PROMQL_QUERIES_FILE:?PROMQL_QUERIES_FILE env var is required}"
+K6_SCRIPT_FILE="${K6_SCRIPT_FILE:?K6_SCRIPT_FILE env var is required}"
 
 if [[ ! -f "$QUERIES_FILE" ]]; then
   echo "PromQL queries file not found: $QUERIES_FILE" >&2
@@ -26,7 +24,7 @@ trap 'rm -f "$k6_output_file"' EXIT
 
 echo "Starting k6 stress test..."
 start=$(date +%s)
-k6 run --quiet -e service_url="$service_url" "$K6_SCRIPT_FILE" 2>&1 | tee "$k6_output_file"
+k6 run --quiet -e service_url="$service_url" -e duration="$duration" "$K6_SCRIPT_FILE" 2>&1 | tee "$k6_output_file"
 end=$(date +%s)
 k6_output=$(cat "$k6_output_file")
 
@@ -44,11 +42,15 @@ prom_query() {
   curl -sG "$prometheus_url/api/v1/query" \
     --data-urlencode "query=$1" \
     | jq -c '
-        .data.result[0].value[1]?
-        | if . == null or . == "NaN" then
+        [
+          .data.result[]?.value[1]
+          | select(. != null and . != "NaN")
+          | tonumber
+        ] as $values
+        | if ($values | length) == 0 then
             null
           else
-            (tonumber | (. * 100 | round / 100))
+            ($values | add | (. * 100 | round / 100))
           end
       '
 }
@@ -60,16 +62,15 @@ prom_query_range() {
     --data-urlencode "end=$end" \
     --data-urlencode "step=15" \
     | jq -c '
-        (.data.result[0].values // [])
+        [
+          .data.result[]?.values[]?
+          | select(.[1] != null and .[1] != "NaN")
+          | {ts: .[0], value: (.[1] | tonumber)}
+        ]
+        | group_by(.ts)
         | map([
-            .[0],
-            (
-              if .[1] == null or .[1] == "NaN" then
-                null
-              else
-                (.[1] | tonumber)
-              end
-            )
+            .[0].ts,
+            (map(.value) | add)
           ])
       '
 }

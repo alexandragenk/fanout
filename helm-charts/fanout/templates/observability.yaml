@@ -1,0 +1,49 @@
+{{- if .Values.observability.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: feed-svc
+  namespace: {{ .Values.observability.serviceMonitor.namespace }}
+  labels:
+    release: {{ .Values.observability.serviceMonitor.releaseLabel }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ include "fanout.namespace" . }}
+  selector:
+    matchLabels:
+      app: feed
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.observability.serviceMonitor.interval }}
+  targetLabels:
+    - app
+  podTargetLabels:
+    - metrics_group
+    - app.kubernetes.io/name
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: like-svc
+  namespace: {{ .Values.observability.serviceMonitor.namespace }}
+  labels:
+    release: {{ .Values.observability.serviceMonitor.releaseLabel }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ include "fanout.namespace" . }}
+  selector:
+    matchLabels:
+      app: like
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.observability.serviceMonitor.interval }}
+  targetLabels:
+    - app
+  podTargetLabels:
+    - metrics_group
+    - app.kubernetes.io/name
+{{- end }}

@@ -1,26 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
-. config.sh
+: "${ollama_url:?ollama_url env var is required}"
 
-BASELINE_FILE="${BASELINE_FILE:-/data/old-report.json}"
-CANDIDATE_FILE="${CANDIDATE_FILE:-/data/new-report.json}"
-REPORT_FILE="${REPORT_FILE:-/data/final-report.txt}"
-HTML_REPORT_FILE="${HTML_REPORT_FILE:-/data/final-report.html}"
-HTML_TEMPLATE_FILE="${HTML_TEMPLATE_FILE:-/template.html}"
-COMPARISON_PROMPT_FILE="${COMPARISON_PROMPT_FILE:-/config-prompts/comparison-prompt.txt}"
-
-if [[ ! -f "$COMPARISON_PROMPT_FILE" && -f /prompts/comparison-prompt.txt ]]; then
-  COMPARISON_PROMPT_FILE=/prompts/comparison-prompt.txt
-fi
+BASELINE_FILE="${BASELINE_FILE:?BASELINE_FILE env var is required}"
+CANDIDATE_FILE="${CANDIDATE_FILE:?CANDIDATE_FILE env var is required}"
+REPORT_FILE="${REPORT_FILE:?REPORT_FILE env var is required}"
+HTML_REPORT_FILE="${HTML_REPORT_FILE:?HTML_REPORT_FILE env var is required}"
+HTML_TEMPLATE_FILE="${HTML_TEMPLATE_FILE:?HTML_TEMPLATE_FILE env var is required}"
+COMPARISON_PROMPT_FILE="${COMPARISON_PROMPT_FILE:?COMPARISON_PROMPT_FILE env var is required}"
 
 if [[ ! -f "$COMPARISON_PROMPT_FILE" ]]; then
   echo "Comparison prompt file not found: $COMPARISON_PROMPT_FILE" >&2
   exit 1
-fi
-
-if [[ ! -f "$HTML_TEMPLATE_FILE" && -f ./template.html ]]; then
-  HTML_TEMPLATE_FILE=./template.html
 fi
 
 if [[ ! -f "$HTML_TEMPLATE_FILE" ]]; then
