@@ -134,10 +134,10 @@ spec:
 
           - name: wait-services
             template: wait-services
-            dependencies: [deploy-main-version]
+            depends: deploy-main-version
 
           - name: seed-data
-            dependencies: [wait-services]
+            depends: wait-services
             template: seed-data
             when: "{{`{{workflow.parameters.seed-data-enabled}}`}} == true"
 
@@ -152,7 +152,7 @@ spec:
                   value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/old-report.json"
 
           - name: deploy-new-version
-            dependencies: [run-baseline]
+            depends: run-baseline
             template: deploy
             arguments:
               parameters:
@@ -162,15 +162,15 @@ spec:
                   value: "{{`{{workflow.parameters.new-like-image}}`}}"
 
           - name: wait-services-new
-            dependencies: [deploy-new-version]
+            depends: deploy-new-version
             template: wait-services
 
           - name: cool-down-before-candidate
-            dependencies: [wait-services-new]
+            depends: wait-services-new
             template: sleep
 
           - name: run-candidate
-            dependencies: [cool-down-before-candidate]
+            depends: cool-down-before-candidate
             template: run-assistant-collect
             arguments:
               parameters:
@@ -180,7 +180,7 @@ spec:
                   value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/new-report.json"
 
           - name: compare-reports
-            dependencies: [run-candidate]
+            depends: run-candidate
             template: compare-and-analyze
 
     - name: wait-services
