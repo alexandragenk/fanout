@@ -84,6 +84,11 @@ artifactRepository:
       repository: minio/minio
       tag: latest
       pullPolicy: IfNotPresent
+    bucketInit:
+      image:
+        repository: minio/mc
+        tag: latest
+        pullPolicy: IfNotPresent
     dataPath: /data
     storage:
       enabled: true

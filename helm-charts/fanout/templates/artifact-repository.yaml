@@ -81,6 +81,45 @@ spec:
 {{- else }}
           emptyDir: {}
 {{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.artifactRepository.minio.serviceName }}-create-bucket
+  namespace: {{ include "fanout.namespace" . }}
+spec:
+  backoffLimit: 12
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.artifactRepository.minio.serviceName }}-create-bucket
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: create-bucket
+          image: {{ printf "%s:%s" .Values.artifactRepository.minio.bucketInit.image.repository .Values.artifactRepository.minio.bucketInit.image.tag | quote }}
+          imagePullPolicy: {{ .Values.artifactRepository.minio.bucketInit.image.pullPolicy }}
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.artifactRepository.secretName }}
+                  key: {{ .Values.artifactRepository.s3.accessKeyKey }}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.artifactRepository.secretName }}
+                  key: {{ .Values.artifactRepository.s3.secretKeyKey }}
+          command: [sh, -c]
+          args:
+            - |
+              set -eu
+              endpoint="http://{{ .Values.artifactRepository.minio.serviceName }}:{{ .Values.artifactRepository.minio.service.apiPort }}"
+              until mc alias set fanout-artifacts "$endpoint" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do
+                echo "Waiting for MinIO at $endpoint..."
+                sleep 3
+              done
+              mc mb --ignore-existing "fanout-artifacts/{{ .Values.artifactRepository.s3.bucket }}"
 {{- end }}
 {{- if .Values.artifactRepository.useDefaultConfigMap }}
 ---
