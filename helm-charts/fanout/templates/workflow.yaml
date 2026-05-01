@@ -150,6 +150,10 @@ spec:
                   value: /data/old-report.json
                 - name: artifact-key
                   value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/old-report.json"
+                - name: k6-html-report-file
+                  value: /data/old-k6-report.html
+                - name: k6-html-artifact-key
+                  value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/old-k6-report.html"
 
           - name: deploy-new-version
             depends: run-baseline
@@ -178,6 +182,10 @@ spec:
                   value: /data/new-report.json
                 - name: artifact-key
                   value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/new-report.json"
+                - name: k6-html-report-file
+                  value: /data/new-k6-report.html
+                - name: k6-html-artifact-key
+                  value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/new-k6-report.html"
 
           - name: compare-reports
             depends: run-candidate
@@ -265,6 +273,8 @@ spec:
         parameters:
           - name: report-file
           - name: artifact-key
+          - name: k6-html-report-file
+          - name: k6-html-artifact-key
       outputs:
         artifacts:
           - name: metrics-report
@@ -273,6 +283,12 @@ spec:
               none: {}
             s3:
               key: "{{`{{inputs.parameters.artifact-key}}`}}"
+          - name: k6-html-report
+            path: "{{`{{inputs.parameters.k6-html-report-file}}`}}"
+            archive:
+              none: {}
+            s3:
+              key: "{{`{{inputs.parameters.k6-html-artifact-key}}`}}"
       container:
         image: "{{`{{workflow.parameters.assistant-image}}`}}"
         imagePullPolicy: {{ .Values.workflow.assistantImage.pullPolicy }}
@@ -305,6 +321,8 @@ spec:
             value: "{{`{{workflow.parameters.k6-script-file}}`}}"
           - name: REPORT_FILE
             value: "{{`{{inputs.parameters.report-file}}`}}"
+          - name: K6_HTML_REPORT_FILE
+            value: "{{`{{inputs.parameters.k6-html-report-file}}`}}"
 
     - name: deploy
       inputs:

@@ -6,6 +6,7 @@ set -euo pipefail
 : "${duration:?duration env var is required}"
 
 REPORT_FILE="${REPORT_FILE:?REPORT_FILE env var is required}"
+K6_HTML_REPORT_FILE="${K6_HTML_REPORT_FILE:?K6_HTML_REPORT_FILE env var is required}"
 QUERIES_FILE="${PROMQL_QUERIES_FILE:?PROMQL_QUERIES_FILE env var is required}"
 K6_SCRIPT_FILE="${K6_SCRIPT_FILE:?K6_SCRIPT_FILE env var is required}"
 
@@ -24,7 +25,11 @@ trap 'rm -f "$k6_output_file"' EXIT
 
 echo "Starting k6 stress test..."
 start=$(date +%s)
-k6 run --quiet -e service_url="$service_url" -e duration="$duration" "$K6_SCRIPT_FILE" 2>&1 | tee "$k6_output_file"
+mkdir -p "$(dirname "$REPORT_FILE")" "$(dirname "$K6_HTML_REPORT_FILE")"
+K6_WEB_DASHBOARD=true \
+K6_WEB_DASHBOARD_PORT=-1 \
+K6_WEB_DASHBOARD_EXPORT="$K6_HTML_REPORT_FILE" \
+  k6 run --quiet -e service_url="$service_url" -e duration="$duration" "$K6_SCRIPT_FILE" 2>&1 | tee "$k6_output_file"
 end=$(date +%s)
 k6_output=$(cat "$k6_output_file")
 
@@ -91,9 +96,6 @@ for q in "${queries[@]}"; do
     --argjson values "$q_series" \
     '. + {($query): $values}' <<< "$metrics_json")
 done
-
-
-mkdir -p "$(dirname "$REPORT_FILE")"
 
 jq -n \
   --arg k6_output "$k6_output" \
