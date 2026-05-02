@@ -1,0 +1,401 @@
+{{- if .Values.workflow.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fanout-metrics-pvc
+  namespace: {{ include "fanout.namespace" . }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.workflow.metricsPvc.storage }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.workflow.serviceAccount.name }}
+  namespace: {{ include "fanout.namespace" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-workflow-role
+  namespace: {{ include "fanout.namespace" . }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "delete", "patch"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows", "workflowtemplates"]
+    verbs: ["get", "list", "watch", "create"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflowtaskresults"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-workflow-rb
+  namespace: {{ include "fanout.namespace" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.workflow.serviceAccount.name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argo-workflow-role
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: {{ .Values.workflow.template.name }}
+  namespace: {{ include "fanout.namespace" . }}
+spec:
+  serviceAccountName: {{ .Values.workflow.serviceAccount.name }}
+{{- if and .Values.artifactRepository.enabled .Values.artifactRepository.useDefaultConfigMap }}
+  artifactRepositoryRef:
+    configMap: {{ .Values.artifactRepository.configMapName }}
+    key: {{ .Values.artifactRepository.configKey }}
+{{- end }}
+  entrypoint: main
+  volumes:
+    - name: metrics-storage
+      persistentVolumeClaim:
+        claimName: fanout-metrics-pvc
+    - name: promql-config
+      configMap:
+        name: promql-queries-config
+    - name: assistant-scripts-config
+      configMap:
+        name: assistant-scripts-config
+        defaultMode: 0555
+    - name: k6-scripts-config
+      configMap:
+        name: k6-scripts-config
+    - name: llm-prompts-config
+      configMap:
+        name: llm-prompts-config
+    - name: html-template-config
+      configMap:
+        name: html-template-config
+  arguments:
+    parameters:
+      - name: assistant-image
+        value: {{ printf "%s:%s" .Values.workflow.assistantImage.repository .Values.workflow.assistantImage.tag | quote }}
+      - name: fill-image
+        value: {{ printf "%s:%s" .Values.workflow.fillImage.repository .Values.workflow.fillImage.tag | quote }}
+      - name: feed-image
+        value: {{ printf "%s:%s" .Values.workflow.baselineImages.feed.repository .Values.workflow.baselineImages.feed.tag | quote }}
+      - name: like-image
+        value: {{ printf "%s:%s" .Values.workflow.baselineImages.like.repository .Values.workflow.baselineImages.like.tag | quote }}
+      - name: new-feed-image
+        value: {{ printf "%s:%s" .Values.workflow.candidateImages.feed.repository .Values.workflow.candidateImages.feed.tag | quote }}
+      - name: new-like-image
+        value: {{ printf "%s:%s" .Values.workflow.candidateImages.like.repository .Values.workflow.candidateImages.like.tag | quote }}
+      - name: service-url
+        value: {{ .Values.workflow.serviceUrl | quote }}
+      - name: prometheus-url
+        value: {{ .Values.workflow.prometheusUrl | quote }}
+      - name: ollama-url
+        value: {{ .Values.workflow.ollamaUrl | quote }}
+      - name: duration
+        value: {{ .Values.workflow.duration | quote }}
+      - name: promql-queries-file
+        value: {{ .Values.workflow.promqlQueriesFile | quote }}
+      - name: k6-script-file
+        value: {{ .Values.workflow.k6ScriptFile | quote }}
+      - name: comparison-prompt-file
+        value: {{ .Values.workflow.comparisonPromptFile | quote }}
+      - name: html-template-file
+        value: {{ .Values.workflow.htmlTemplateFile | quote }}
+      - name: seed-data-enabled
+        value: {{ .Values.workflow.seedData.enabled | quote }}
+      - name: seed-data-num-users
+        value: {{ .Values.workflow.seedData.numUsers | quote }}
+      - name: seed-data-posts-per-user
+        value: {{ .Values.workflow.seedData.postsPerUser | quote }}
+
+  templates:
+    - name: main
+      dag:
+        tasks:
+          - name: deploy-main-version
+            template: deploy
+            arguments:
+              parameters:
+                - name: feed-image
+                  value: "{{`{{workflow.parameters.feed-image}}`}}"
+                - name: like-image
+                  value: "{{`{{workflow.parameters.like-image}}`}}"
+
+          - name: wait-services
+            template: wait-services
+            depends: deploy-main-version
+
+          - name: seed-data
+            depends: wait-services
+            template: seed-data
+            when: "{{`{{workflow.parameters.seed-data-enabled}}`}} == true"
+
+          - name: run-baseline
+            depends: "seed-data.Succeeded || seed-data.Skipped"
+            template: run-assistant-collect
+            arguments:
+              parameters:
+                - name: report-file
+                  value: /data/old-report.json
+                - name: artifact-key
+                  value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/old-report.json"
+                - name: k6-html-report-file
+                  value: /data/old-k6-report.html
+                - name: k6-html-artifact-key
+                  value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/old-k6-report.html"
+
+          - name: deploy-new-version
+            depends: run-baseline
+            template: deploy
+            arguments:
+              parameters:
+                - name: feed-image
+                  value: "{{`{{workflow.parameters.new-feed-image}}`}}"
+                - name: like-image
+                  value: "{{`{{workflow.parameters.new-like-image}}`}}"
+
+          - name: wait-services-new
+            depends: deploy-new-version
+            template: wait-services
+
+          - name: cool-down-before-candidate
+            depends: wait-services-new
+            template: sleep
+
+          - name: run-candidate
+            depends: cool-down-before-candidate
+            template: run-assistant-collect
+            arguments:
+              parameters:
+                - name: report-file
+                  value: /data/new-report.json
+                - name: artifact-key
+                  value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/new-report.json"
+                - name: k6-html-report-file
+                  value: /data/new-k6-report.html
+                - name: k6-html-artifact-key
+                  value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/new-k6-report.html"
+
+          - name: compare-reports
+            depends: run-candidate
+            template: compare-and-analyze
+
+    - name: wait-services
+      container:
+        image: {{ printf "%s:%s" .Values.workflow.fillImage.repository .Values.workflow.fillImage.tag | quote }}
+        command: [sh, -c]
+        args:
+          - |
+            set -eu
+            until curl -sf http://feed-svc:{{ .Values.feedService.port }}/ready; do echo waiting feed; sleep 3; done
+            echo "feed-svc readiness check passed"
+            until curl -sf http://like-svc:{{ .Values.likeService.port }}/ready; do echo waiting like; sleep 3; done
+            echo "like-svc readiness check passed"
+            until curl -sf {{ .Values.workflow.prometheusUrl }}/-/ready; do echo waiting prometheus; sleep 3; done
+            echo "prometheus readiness check passed"
+            until curl -sf {{ .Values.workflow.ollamaUrl }}/api/tags >/dev/null; do echo waiting ollama; sleep 5; done
+            echo "ollama readiness check passed"
+
+    - name: sleep
+      container:
+        image: {{ printf "%s:%s" .Values.workflow.fillImage.repository .Values.workflow.fillImage.tag | quote }}
+        command: [sh, -c]
+        args:
+          - |
+            set -eu
+            echo "Sleeping for {{`{{workflow.parameters.duration}}`}} before candidate run"
+            sleep {{`{{workflow.parameters.duration}}`}}
+
+    - name: seed-data
+      script:
+        image: alpine:3.19
+        command: [sh]
+        source: |
+          set -eux
+
+          apk add --no-cache curl jq
+
+          API_URL="http://feed-svc:{{ .Values.feedService.port }}"
+          NUM_USERS="{{`{{workflow.parameters.seed-data-num-users}}`}}"
+          POSTS_PER_USER="{{`{{workflow.parameters.seed-data-posts-per-user}}`}}"
+
+          echo "Starting subscription process..."
+          for i in $(seq 1 $NUM_USERS); do
+            for j in $(seq 1 $NUM_USERS); do
+              if [ "$i" -eq "$j" ]; then continue; fi
+              curl -s -X POST "$API_URL/subscribe" \
+                -H "X-User-Id: $i" \
+                -H "Content-Type: application/json" \
+                -d "{\"user_id\": $j}" > /dev/null
+            done
+            echo "User $i subscribed to all others."
+          done
+
+          echo "Starting post creation..."
+          for i in $(seq 1 $NUM_USERS); do
+            for p in $(seq 1 $POSTS_PER_USER); do
+              curl -s -X POST "$API_URL/post" \
+                -H "X-User-Id: $i" \
+                -H "Content-Type: application/json" \
+                -d "{\"text\": \"Post #$p from User #$i\"}" > /dev/null
+            done
+            echo "User $i created $POSTS_PER_USER posts."
+          done
+
+          echo "Starting like process..."
+          for i in $(seq 1 $NUM_USERS); do
+            FEED=$(curl -s "$API_URL/feed?count=2000" -H "X-User-Id: $i")
+            POST_IDS=$(echo "$FEED" | jq -r '.[].postId')
+
+            for pid in $POST_IDS; do
+              curl -s -X POST "$API_URL/like" \
+                -H "X-User-Id: $i" \
+                -H "Content-Type: application/json" \
+                -d "{\"postId\": $pid}" > /dev/null
+            done
+          done
+
+          echo "Done!"
+
+    - name: run-assistant-collect
+      inputs:
+        parameters:
+          - name: report-file
+          - name: artifact-key
+          - name: k6-html-report-file
+          - name: k6-html-artifact-key
+      outputs:
+        artifacts:
+          - name: metrics-report
+            path: "{{`{{inputs.parameters.report-file}}`}}"
+            archive:
+              none: {}
+            s3:
+              key: "{{`{{inputs.parameters.artifact-key}}`}}"
+          - name: k6-html-report
+            path: "{{`{{inputs.parameters.k6-html-report-file}}`}}"
+            archive:
+              none: {}
+            s3:
+              key: "{{`{{inputs.parameters.k6-html-artifact-key}}`}}"
+      container:
+        image: "{{`{{workflow.parameters.assistant-image}}`}}"
+        imagePullPolicy: {{ .Values.workflow.assistantImage.pullPolicy }}
+        command: [bash, -lc]
+        args:
+          - |
+            set -euo pipefail
+            echo "Starting collect-only assistant step"
+            echo "REPORT_FILE=$REPORT_FILE"
+            /assistant-scripts/run_stress_collect.sh
+        volumeMounts:
+          - name: metrics-storage
+            mountPath: /data
+          - name: promql-config
+            mountPath: /config
+          - name: assistant-scripts-config
+            mountPath: /assistant-scripts
+          - name: k6-scripts-config
+            mountPath: /config-k6
+        env:
+          - name: service_url
+            value: "{{`{{workflow.parameters.service-url}}`}}"
+          - name: prometheus_url
+            value: "{{`{{workflow.parameters.prometheus-url}}`}}"
+          - name: ollama_url
+            value: "{{`{{workflow.parameters.ollama-url}}`}}"
+          - name: duration
+            value: "{{`{{workflow.parameters.duration}}`}}"
+          - name: PROMQL_QUERIES_FILE
+            value: "{{`{{workflow.parameters.promql-queries-file}}`}}"
+          - name: K6_SCRIPT_FILE
+            value: "{{`{{workflow.parameters.k6-script-file}}`}}"
+          - name: REPORT_FILE
+            value: "{{`{{inputs.parameters.report-file}}`}}"
+          - name: K6_HTML_REPORT_FILE
+            value: "{{`{{inputs.parameters.k6-html-report-file}}`}}"
+
+    - name: deploy
+      inputs:
+        parameters:
+          - name: feed-image
+          - name: like-image
+      container:
+        image: {{ printf "%s:%s" .Values.workflow.kubectlImage.repository .Values.workflow.kubectlImage.tag | quote }}
+        command: [sh, -c]
+        args:
+          - |
+            set -eux
+
+            kubectl set image deployment/feed \
+              feed={{`{{inputs.parameters.feed-image}}`}}
+
+            kubectl set image deployment/like \
+              like={{`{{inputs.parameters.like-image}}`}}
+
+            kubectl rollout status deployment/feed --timeout=180s
+            kubectl rollout status deployment/like --timeout=180s
+
+    - name: compare-and-analyze
+      outputs:
+        artifacts:
+          - name: final-report-text
+            path: /data/final-report.txt
+            archive:
+              none: {}
+            s3:
+              key: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/final-report.txt"
+          - name: final-report-html
+            path: /data/final-report.html
+            archive:
+              none: {}
+            s3:
+              key: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/final-report.html"
+      container:
+        image: "{{`{{workflow.parameters.assistant-image}}`}}"
+        imagePullPolicy: {{ .Values.workflow.assistantImage.pullPolicy }}
+        command: [bash, -lc]
+        args:
+          - |
+            set -euo pipefail
+            echo "Starting final compare-and-analyze step"
+            echo "BASELINE_FILE=$BASELINE_FILE"
+            echo "CANDIDATE_FILE=$CANDIDATE_FILE"
+            echo "REPORT_FILE=$REPORT_FILE"
+            /assistant-scripts/compare_and_analyze.sh
+        volumeMounts:
+          - name: metrics-storage
+            mountPath: /data
+          - name: assistant-scripts-config
+            mountPath: /assistant-scripts
+          - name: llm-prompts-config
+            mountPath: /config-prompts
+          - name: html-template-config
+            mountPath: /config-html
+        env:
+          - name: ollama_url
+            value: "{{`{{workflow.parameters.ollama-url}}`}}"
+          - name: COMPARISON_PROMPT_FILE
+            value: "{{`{{workflow.parameters.comparison-prompt-file}}`}}"
+          - name: BASELINE_FILE
+            value: /data/old-report.json
+          - name: CANDIDATE_FILE
+            value: /data/new-report.json
+          - name: REPORT_FILE
+            value: /data/final-report.txt
+          - name: HTML_REPORT_FILE
+            value: /data/final-report.html
+          - name: HTML_TEMPLATE_FILE
+            value: "{{`{{workflow.parameters.html-template-file}}`}}"
+{{- end }}

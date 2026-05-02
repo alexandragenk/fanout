@@ -4,12 +4,8 @@ USER root
 
 RUN apk add --no-cache curl jq bash
 
-WORKDIR /app
-
-COPY run_stress.sh config.sh load_k6_feed.js ./
-
-RUN chmod +x run_stress.sh
+WORKDIR /
 
 ENTRYPOINT []
 
-CMD ["./run_stress.sh"]
+CMD ["bash", "-lc", "echo 'This image is intended to run only from Argo Workflow with explicit command and env.' >&2; exit 64"]

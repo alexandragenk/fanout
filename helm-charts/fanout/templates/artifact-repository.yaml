@@ -1,0 +1,146 @@
+{{- if .Values.artifactRepository.enabled }}
+{{- if .Values.artifactRepository.minio.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.artifactRepository.minio.serviceName }}
+  namespace: {{ include "fanout.namespace" . }}
+spec:
+  selector:
+    app: {{ .Values.artifactRepository.minio.serviceName }}
+  ports:
+    - name: api
+      port: {{ .Values.artifactRepository.minio.service.apiPort }}
+      targetPort: {{ .Values.artifactRepository.minio.service.apiPort }}
+    - name: console
+      port: {{ .Values.artifactRepository.minio.service.consolePort }}
+      targetPort: {{ .Values.artifactRepository.minio.service.consolePort }}
+{{- if .Values.artifactRepository.minio.storage.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.artifactRepository.minio.serviceName }}-data
+  namespace: {{ include "fanout.namespace" . }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.artifactRepository.minio.storage.size }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.artifactRepository.minio.serviceName }}
+  namespace: {{ include "fanout.namespace" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.artifactRepository.minio.serviceName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.artifactRepository.minio.serviceName }}
+    spec:
+      containers:
+        - name: minio
+          image: {{ printf "%s:%s" .Values.artifactRepository.minio.image.repository .Values.artifactRepository.minio.image.tag | quote }}
+          imagePullPolicy: {{ .Values.artifactRepository.minio.image.pullPolicy }}
+          args:
+            - server
+            - {{ .Values.artifactRepository.minio.dataPath }}
+            - --console-address
+            - :{{ .Values.artifactRepository.minio.service.consolePort }}
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.artifactRepository.secretName }}
+                  key: {{ .Values.artifactRepository.s3.accessKeyKey }}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.artifactRepository.secretName }}
+                  key: {{ .Values.artifactRepository.s3.secretKeyKey }}
+          ports:
+            - name: api
+              containerPort: {{ .Values.artifactRepository.minio.service.apiPort }}
+            - name: console
+              containerPort: {{ .Values.artifactRepository.minio.service.consolePort }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.artifactRepository.minio.dataPath }}
+      volumes:
+        - name: data
+{{- if .Values.artifactRepository.minio.storage.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.artifactRepository.minio.serviceName }}-data
+{{- else }}
+          emptyDir: {}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.artifactRepository.minio.serviceName }}-create-bucket
+  namespace: {{ include "fanout.namespace" . }}
+spec:
+  backoffLimit: 12
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.artifactRepository.minio.serviceName }}-create-bucket
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: create-bucket
+          image: {{ printf "%s:%s" .Values.artifactRepository.minio.bucketInit.image.repository .Values.artifactRepository.minio.bucketInit.image.tag | quote }}
+          imagePullPolicy: {{ .Values.artifactRepository.minio.bucketInit.image.pullPolicy }}
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.artifactRepository.secretName }}
+                  key: {{ .Values.artifactRepository.s3.accessKeyKey }}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.artifactRepository.secretName }}
+                  key: {{ .Values.artifactRepository.s3.secretKeyKey }}
+          command: [sh, -c]
+          args:
+            - |
+              set -eu
+              endpoint="http://{{ .Values.artifactRepository.minio.serviceName }}:{{ .Values.artifactRepository.minio.service.apiPort }}"
+              until mc alias set fanout-artifacts "$endpoint" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do
+                echo "Waiting for MinIO at $endpoint..."
+                sleep 3
+              done
+              mc mb --ignore-existing "fanout-artifacts/{{ .Values.artifactRepository.s3.bucket }}"
+{{- end }}
+{{- if .Values.artifactRepository.useDefaultConfigMap }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.artifactRepository.configMapName }}
+  namespace: {{ include "fanout.namespace" . }}
+  annotations:
+    workflows.argoproj.io/default-artifact-repository: {{ .Values.artifactRepository.configKey }}
+data:
+  {{ .Values.artifactRepository.configKey }}: |
+    s3:
+      bucket: {{ .Values.artifactRepository.s3.bucket }}
+      endpoint: {{ .Values.artifactRepository.s3.endpoint }}
+      insecure: {{ .Values.artifactRepository.s3.insecure }}
+      accessKeySecret:
+        name: {{ .Values.artifactRepository.secretName }}
+        key: {{ .Values.artifactRepository.s3.accessKeyKey }}
+      secretKeySecret:
+        name: {{ .Values.artifactRepository.secretName }}
+        key: {{ .Values.artifactRepository.s3.secretKeyKey }}
+{{- end }}
+{{- end }}

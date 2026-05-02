@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>PerfTest Report</title>
+    <link rel="stylesheet" href="https://leeoniya.github.io/uPlot/dist/uPlot.min.css">
+    <script src="https://leeoniya.github.io/uPlot/dist/uPlot.iife.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension/lib/index.umd.js"></script>
+    <style>
+        .container {
+            font-family: sans-serif;
+            display: block;
+            margin: 0 auto;
+            max-width: 1040px;
+        }
+        .container h1 {
+            text-align: center;
+        }
+        .chart {
+            background: #f8f8f8;
+            display: inline-block;
+            width: 500px;
+            margin: 10px;
+        }
+        .description {
+            margin: 10px;
+            font-size: 12px;
+        }
+        #summary {
+            margin: 10px
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Отчет __REPORT_DATE__</h1>
+<script>
+    const baselineMetrix = __BASELINE_METRICS_JSON__;
+    const candidateMetrix = __CANDIDATE_METRICS_JSON__;
+    const analysis = __ANALYSIS_JSON__;
+
+    marked.use(markedKatex({
+        throwOnError: false,
+        displayMode: false,
+        nonStandard: true
+    }));
+
+    function drawChart(title, values, color) {
+        const chart = document.createElement("div");
+        chart.className = "chart";
+        document.currentScript.parentElement.appendChild(chart);
+
+        if (values && values.length > 0) {
+            const timestamps = values.map(v => v[0]);
+            const testValues = values.map(v => v[1]);
+
+            const data = [timestamps, testValues];
+
+            const opts = {
+                width: 500,
+                height: 200,
+                series: [
+                    {}, {
+                        label: "Value",
+                        stroke: color,
+                        width: 2,
+                    }
+                ]
+            };
+
+            new uPlot(opts, data, chart);
+        }
+
+        const description = document.createElement("div");
+        description.className = "description";
+        description.textContent = title;
+        chart.appendChild(description);
+    }
+
+    const allKeys = Array.from(new Set([
+        ...Object.keys(baselineMetrix || {}),
+        ...Object.keys(candidateMetrix || {})
+    ]));
+
+    for (const key of allKeys) {
+        drawChart(key + " [baseline]", baselineMetrix[key], "#306d8c");
+        drawChart(key + " [candidate]", candidateMetrix[key], "#b91c1c");
+    }
+
+    const summary = document.createElement("div");
+    summary.id = "summary";
+    summary.innerHTML = marked.parse(analysis);
+    document.currentScript.parentElement.appendChild(summary);
+</script>
+</div>
+</body>
+</html>
