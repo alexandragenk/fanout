@@ -98,10 +98,6 @@ spec:
         name: html-template-config
   arguments:
     parameters:
-      - name: assistant-image
-        value: {{ $workflow.assistantImage.image | quote }}
-      - name: fill-image
-        value: {{ $workflow.fillImage | quote }}
       - name: feed-image
         value: {{ $workflow.baselineImages.feed | quote }}
       - name: like-image
@@ -110,22 +106,8 @@ spec:
         value: {{ $workflow.candidateImages.feed | quote }}
       - name: new-like-image
         value: {{ $workflow.candidateImages.like | quote }}
-      - name: service-url
-        value: {{ $workflow.serviceUrl | quote }}
-      - name: prometheus-url
-        value: {{ $workflow.prometheusUrl | quote }}
-      - name: ollama-url
-        value: {{ $workflow.ollamaUrl | quote }}
       - name: duration
         value: {{ $workflow.duration | quote }}
-      - name: promql-queries-file
-        value: {{ $workflow.promqlQueriesFile | quote }}
-      - name: k6-script-file
-        value: {{ $workflow.k6ScriptFile | quote }}
-      - name: comparison-prompt-file
-        value: {{ $workflow.comparisonPromptFile | quote }}
-      - name: html-template-file
-        value: {{ $workflow.htmlTemplateFile | quote }}
       - name: seed-data-enabled
         value: {{ $workflow.seedData.enabled | quote }}
       - name: seed-data-num-users
@@ -304,7 +286,7 @@ spec:
             s3:
               key: {{ include "fanout.argo" "inputs.parameters.k6-html-artifact-key" | quote }}
       container:
-        image: {{ include "fanout.argo" "workflow.parameters.assistant-image" | quote }}
+        image: {{ $workflow.assistantImage.image | quote }}
         imagePullPolicy: {{ $workflow.assistantImage.pullPolicy }}
         command: [bash, -lc]
         args:
@@ -324,17 +306,17 @@ spec:
             mountPath: /config-k6
         env:
           - name: service_url
-            value: {{ include "fanout.argo" "workflow.parameters.service-url" | quote }}
+            value: {{ $workflow.serviceUrl | quote }}
           - name: prometheus_url
-            value: {{ include "fanout.argo" "workflow.parameters.prometheus-url" | quote }}
+            value: {{ $workflow.prometheusUrl | quote }}
           - name: ollama_url
-            value: {{ include "fanout.argo" "workflow.parameters.ollama-url" | quote }}
+            value: {{ $workflow.ollamaUrl | quote }}
           - name: duration
             value: {{ include "fanout.argo" "workflow.parameters.duration" | quote }}
           - name: PROMQL_QUERIES_FILE
-            value: {{ include "fanout.argo" "workflow.parameters.promql-queries-file" | quote }}
+            value: {{ $workflow.promqlQueriesFile | quote }}
           - name: K6_SCRIPT_FILE
-            value: {{ include "fanout.argo" "workflow.parameters.k6-script-file" | quote }}
+            value: {{ $workflow.k6ScriptFile | quote }}
           - name: REPORT_FILE
             value: {{ include "fanout.argo" "inputs.parameters.report-file" | quote }}
           - name: K6_HTML_REPORT_FILE
@@ -377,7 +359,7 @@ spec:
             s3:
               key: {{ printf "%s/final-report.html" $artifactPath | quote }}
       container:
-        image: {{ include "fanout.argo" "workflow.parameters.assistant-image" | quote }}
+        image: {{ $workflow.assistantImage.image | quote }}
         imagePullPolicy: {{ $workflow.assistantImage.pullPolicy }}
         command: [bash, -lc]
         args:
@@ -399,9 +381,9 @@ spec:
             mountPath: /config-html
         env:
           - name: ollama_url
-            value: {{ include "fanout.argo" "workflow.parameters.ollama-url" | quote }}
+            value: {{ $workflow.ollamaUrl | quote }}
           - name: COMPARISON_PROMPT_FILE
-            value: {{ include "fanout.argo" "workflow.parameters.comparison-prompt-file" | quote }}
+            value: {{ $workflow.comparisonPromptFile | quote }}
           - name: BASELINE_FILE
             value: /data/old-report.json
           - name: CANDIDATE_FILE
@@ -411,5 +393,5 @@ spec:
           - name: HTML_REPORT_FILE
             value: /data/final-report.html
           - name: HTML_TEMPLATE_FILE
-            value: {{ include "fanout.argo" "workflow.parameters.html-template-file" | quote }}
+            value: {{ $workflow.htmlTemplateFile | quote }}
 {{- end }}
