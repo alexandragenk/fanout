@@ -1,27 +1,37 @@
-{{- if .Values.workflow.enabled }}
+{{- $root := . -}}
+{{- $workflow := .Values.workflow -}}
+{{- $artifactRepository := .Values.artifactRepository -}}
+{{- $feed := .Values.feedService -}}
+{{- $like := .Values.likeService -}}
+{{- $workflowName := include "fanout.argo" "workflow.name" -}}
+{{- $workflowYear := include "fanout.argo" "workflow.creationTimestamp.Y" -}}
+{{- $workflowMonth := include "fanout.argo" "workflow.creationTimestamp.m" -}}
+{{- $workflowDay := include "fanout.argo" "workflow.creationTimestamp.d" -}}
+{{- $artifactPath := printf "reports/%s-%s-%s/%s" $workflowYear $workflowMonth $workflowDay $workflowName -}}
+{{- if $workflow.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: fanout-metrics-pvc
-  namespace: {{ include "fanout.namespace" . }}
+  namespace: {{ $root.Release.Namespace }}
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{ .Values.workflow.metricsPvc.storage }}
+      storage: {{ $workflow.metricsPvc.storage }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ .Values.workflow.serviceAccount.name }}
-  namespace: {{ include "fanout.namespace" . }}
+  name: {{ $workflow.serviceAccount.name }}
+  namespace: {{ $root.Release.Namespace }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: argo-workflow-role
-  namespace: {{ include "fanout.namespace" . }}
+  namespace: {{ $root.Release.Namespace }}
 rules:
   - apiGroups: [""]
     resources: ["pods", "pods/log", "services", "configmaps"]
@@ -40,10 +50,10 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: argo-workflow-rb
-  namespace: {{ include "fanout.namespace" . }}
+  namespace: {{ $root.Release.Namespace }}
 subjects:
   - kind: ServiceAccount
-    name: {{ .Values.workflow.serviceAccount.name }}
+    name: {{ $workflow.serviceAccount.name }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -52,14 +62,14 @@ roleRef:
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  name: {{ .Values.workflow.template.name }}
-  namespace: {{ include "fanout.namespace" . }}
+  name: {{ $workflow.template.name }}
+  namespace: {{ $root.Release.Namespace }}
 spec:
-  serviceAccountName: {{ .Values.workflow.serviceAccount.name }}
-{{- if and .Values.artifactRepository.enabled .Values.artifactRepository.useDefaultConfigMap }}
+  serviceAccountName: {{ $workflow.serviceAccount.name }}
+{{- if and $artifactRepository.enabled $artifactRepository.useDefaultConfigMap }}
   artifactRepositoryRef:
-    configMap: {{ .Values.artifactRepository.configMapName }}
-    key: {{ .Values.artifactRepository.configKey }}
+    configMap: {{ $artifactRepository.configMapName }}
+    key: {{ $artifactRepository.configKey }}
 {{- end }}
   entrypoint: main
   volumes:
@@ -85,39 +95,39 @@ spec:
   arguments:
     parameters:
       - name: assistant-image
-        value: {{ printf "%s:%s" .Values.workflow.assistantImage.repository .Values.workflow.assistantImage.tag | quote }}
+        value: {{ $workflow.assistantImage.image | quote }}
       - name: fill-image
-        value: {{ printf "%s:%s" .Values.workflow.fillImage.repository .Values.workflow.fillImage.tag | quote }}
+        value: {{ $workflow.fillImage | quote }}
       - name: feed-image
-        value: {{ printf "%s:%s" .Values.workflow.baselineImages.feed.repository .Values.workflow.baselineImages.feed.tag | quote }}
+        value: {{ $workflow.baselineImages.feed | quote }}
       - name: like-image
-        value: {{ printf "%s:%s" .Values.workflow.baselineImages.like.repository .Values.workflow.baselineImages.like.tag | quote }}
+        value: {{ $workflow.baselineImages.like | quote }}
       - name: new-feed-image
-        value: {{ printf "%s:%s" .Values.workflow.candidateImages.feed.repository .Values.workflow.candidateImages.feed.tag | quote }}
+        value: {{ $workflow.candidateImages.feed | quote }}
       - name: new-like-image
-        value: {{ printf "%s:%s" .Values.workflow.candidateImages.like.repository .Values.workflow.candidateImages.like.tag | quote }}
+        value: {{ $workflow.candidateImages.like | quote }}
       - name: service-url
-        value: {{ .Values.workflow.serviceUrl | quote }}
+        value: {{ $workflow.serviceUrl | quote }}
       - name: prometheus-url
-        value: {{ .Values.workflow.prometheusUrl | quote }}
+        value: {{ $workflow.prometheusUrl | quote }}
       - name: ollama-url
-        value: {{ .Values.workflow.ollamaUrl | quote }}
+        value: {{ $workflow.ollamaUrl | quote }}
       - name: duration
-        value: {{ .Values.workflow.duration | quote }}
+        value: {{ $workflow.duration | quote }}
       - name: promql-queries-file
-        value: {{ .Values.workflow.promqlQueriesFile | quote }}
+        value: {{ $workflow.promqlQueriesFile | quote }}
       - name: k6-script-file
-        value: {{ .Values.workflow.k6ScriptFile | quote }}
+        value: {{ $workflow.k6ScriptFile | quote }}
       - name: comparison-prompt-file
-        value: {{ .Values.workflow.comparisonPromptFile | quote }}
+        value: {{ $workflow.comparisonPromptFile | quote }}
       - name: html-template-file
-        value: {{ .Values.workflow.htmlTemplateFile | quote }}
+        value: {{ $workflow.htmlTemplateFile | quote }}
       - name: seed-data-enabled
-        value: {{ .Values.workflow.seedData.enabled | quote }}
+        value: {{ $workflow.seedData.enabled | quote }}
       - name: seed-data-num-users
-        value: {{ .Values.workflow.seedData.numUsers | quote }}
+        value: {{ $workflow.seedData.numUsers | quote }}
       - name: seed-data-posts-per-user
-        value: {{ .Values.workflow.seedData.postsPerUser | quote }}
+        value: {{ $workflow.seedData.postsPerUser | quote }}
 
   templates:
     - name: main
@@ -128,9 +138,9 @@ spec:
             arguments:
               parameters:
                 - name: feed-image
-                  value: "{{`{{workflow.parameters.feed-image}}`}}"
+                  value: {{ include "fanout.argo" "workflow.parameters.feed-image" | quote }}
                 - name: like-image
-                  value: "{{`{{workflow.parameters.like-image}}`}}"
+                  value: {{ include "fanout.argo" "workflow.parameters.like-image" | quote }}
 
           - name: wait-services
             template: wait-services
@@ -139,7 +149,7 @@ spec:
           - name: seed-data
             depends: wait-services
             template: seed-data
-            when: "{{`{{workflow.parameters.seed-data-enabled}}`}} == true"
+            when: {{ printf "%s == true" (include "fanout.argo" "workflow.parameters.seed-data-enabled") | quote }}
 
           - name: run-baseline
             depends: "seed-data.Succeeded || seed-data.Skipped"
@@ -149,11 +159,11 @@ spec:
                 - name: report-file
                   value: /data/old-report.json
                 - name: artifact-key
-                  value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/old-report.json"
+                  value: {{ printf "%s/old-report.json" $artifactPath | quote }}
                 - name: k6-html-report-file
                   value: /data/old-k6-report.html
                 - name: k6-html-artifact-key
-                  value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/old-k6-report.html"
+                  value: {{ printf "%s/old-k6-report.html" $artifactPath | quote }}
 
           - name: deploy-new-version
             depends: run-baseline
@@ -161,9 +171,9 @@ spec:
             arguments:
               parameters:
                 - name: feed-image
-                  value: "{{`{{workflow.parameters.new-feed-image}}`}}"
+                  value: {{ include "fanout.argo" "workflow.parameters.new-feed-image" | quote }}
                 - name: like-image
-                  value: "{{`{{workflow.parameters.new-like-image}}`}}"
+                  value: {{ include "fanout.argo" "workflow.parameters.new-like-image" | quote }}
 
           - name: wait-services-new
             depends: deploy-new-version
@@ -181,11 +191,11 @@ spec:
                 - name: report-file
                   value: /data/new-report.json
                 - name: artifact-key
-                  value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/new-report.json"
+                  value: {{ printf "%s/new-report.json" $artifactPath | quote }}
                 - name: k6-html-report-file
                   value: /data/new-k6-report.html
                 - name: k6-html-artifact-key
-                  value: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/new-k6-report.html"
+                  value: {{ printf "%s/new-k6-report.html" $artifactPath | quote }}
 
           - name: compare-reports
             depends: run-candidate
@@ -193,29 +203,29 @@ spec:
 
     - name: wait-services
       container:
-        image: {{ printf "%s:%s" .Values.workflow.fillImage.repository .Values.workflow.fillImage.tag | quote }}
+        image: {{ $workflow.fillImage | quote }}
         command: [sh, -c]
         args:
           - |
             set -eu
-            until curl -sf http://feed-svc:{{ .Values.feedService.port }}/ready; do echo waiting feed; sleep 3; done
+            until curl -sf http://feed-svc:{{ $feed.port }}/ready; do echo waiting feed; sleep 3; done
             echo "feed-svc readiness check passed"
-            until curl -sf http://like-svc:{{ .Values.likeService.port }}/ready; do echo waiting like; sleep 3; done
+            until curl -sf http://like-svc:{{ $like.port }}/ready; do echo waiting like; sleep 3; done
             echo "like-svc readiness check passed"
-            until curl -sf {{ .Values.workflow.prometheusUrl }}/-/ready; do echo waiting prometheus; sleep 3; done
+            until curl -sf {{ $workflow.prometheusUrl }}/-/ready; do echo waiting prometheus; sleep 3; done
             echo "prometheus readiness check passed"
-            until curl -sf {{ .Values.workflow.ollamaUrl }}/api/tags >/dev/null; do echo waiting ollama; sleep 5; done
+            until curl -sf {{ $workflow.ollamaUrl }}/api/tags >/dev/null; do echo waiting ollama; sleep 5; done
             echo "ollama readiness check passed"
 
     - name: sleep
       container:
-        image: {{ printf "%s:%s" .Values.workflow.fillImage.repository .Values.workflow.fillImage.tag | quote }}
+        image: {{ $workflow.fillImage | quote }}
         command: [sh, -c]
         args:
           - |
             set -eu
-            echo "Sleeping for {{`{{workflow.parameters.duration}}`}} before candidate run"
-            sleep {{`{{workflow.parameters.duration}}`}}
+            echo "Sleeping for {{ include "fanout.argo" "workflow.parameters.duration" }} before candidate run"
+            sleep {{ include "fanout.argo" "workflow.parameters.duration" }}
 
     - name: seed-data
       script:
@@ -226,9 +236,9 @@ spec:
 
           apk add --no-cache curl jq
 
-          API_URL="http://feed-svc:{{ .Values.feedService.port }}"
-          NUM_USERS="{{`{{workflow.parameters.seed-data-num-users}}`}}"
-          POSTS_PER_USER="{{`{{workflow.parameters.seed-data-posts-per-user}}`}}"
+          API_URL="http://feed-svc:{{ $feed.port }}"
+          NUM_USERS={{ include "fanout.argo" "workflow.parameters.seed-data-num-users" | quote }}
+          POSTS_PER_USER={{ include "fanout.argo" "workflow.parameters.seed-data-posts-per-user" | quote }}
 
           echo "Starting subscription process..."
           for i in $(seq 1 $NUM_USERS); do
@@ -278,20 +288,20 @@ spec:
       outputs:
         artifacts:
           - name: metrics-report
-            path: "{{`{{inputs.parameters.report-file}}`}}"
+            path: {{ include "fanout.argo" "inputs.parameters.report-file" | quote }}
             archive:
               none: {}
             s3:
-              key: "{{`{{inputs.parameters.artifact-key}}`}}"
+              key: {{ include "fanout.argo" "inputs.parameters.artifact-key" | quote }}
           - name: k6-html-report
-            path: "{{`{{inputs.parameters.k6-html-report-file}}`}}"
+            path: {{ include "fanout.argo" "inputs.parameters.k6-html-report-file" | quote }}
             archive:
               none: {}
             s3:
-              key: "{{`{{inputs.parameters.k6-html-artifact-key}}`}}"
+              key: {{ include "fanout.argo" "inputs.parameters.k6-html-artifact-key" | quote }}
       container:
-        image: "{{`{{workflow.parameters.assistant-image}}`}}"
-        imagePullPolicy: {{ .Values.workflow.assistantImage.pullPolicy }}
+        image: {{ include "fanout.argo" "workflow.parameters.assistant-image" | quote }}
+        imagePullPolicy: {{ $workflow.assistantImage.pullPolicy }}
         command: [bash, -lc]
         args:
           - |
@@ -310,21 +320,21 @@ spec:
             mountPath: /config-k6
         env:
           - name: service_url
-            value: "{{`{{workflow.parameters.service-url}}`}}"
+            value: {{ include "fanout.argo" "workflow.parameters.service-url" | quote }}
           - name: prometheus_url
-            value: "{{`{{workflow.parameters.prometheus-url}}`}}"
+            value: {{ include "fanout.argo" "workflow.parameters.prometheus-url" | quote }}
           - name: ollama_url
-            value: "{{`{{workflow.parameters.ollama-url}}`}}"
+            value: {{ include "fanout.argo" "workflow.parameters.ollama-url" | quote }}
           - name: duration
-            value: "{{`{{workflow.parameters.duration}}`}}"
+            value: {{ include "fanout.argo" "workflow.parameters.duration" | quote }}
           - name: PROMQL_QUERIES_FILE
-            value: "{{`{{workflow.parameters.promql-queries-file}}`}}"
+            value: {{ include "fanout.argo" "workflow.parameters.promql-queries-file" | quote }}
           - name: K6_SCRIPT_FILE
-            value: "{{`{{workflow.parameters.k6-script-file}}`}}"
+            value: {{ include "fanout.argo" "workflow.parameters.k6-script-file" | quote }}
           - name: REPORT_FILE
-            value: "{{`{{inputs.parameters.report-file}}`}}"
+            value: {{ include "fanout.argo" "inputs.parameters.report-file" | quote }}
           - name: K6_HTML_REPORT_FILE
-            value: "{{`{{inputs.parameters.k6-html-report-file}}`}}"
+            value: {{ include "fanout.argo" "inputs.parameters.k6-html-report-file" | quote }}
 
     - name: deploy
       inputs:
@@ -332,17 +342,17 @@ spec:
           - name: feed-image
           - name: like-image
       container:
-        image: {{ printf "%s:%s" .Values.workflow.kubectlImage.repository .Values.workflow.kubectlImage.tag | quote }}
+        image: {{ $workflow.kubectlImage | quote }}
         command: [sh, -c]
         args:
           - |
             set -eux
 
             kubectl set image deployment/feed \
-              feed={{`{{inputs.parameters.feed-image}}`}}
+              feed={{ include "fanout.argo" "inputs.parameters.feed-image" }}
 
             kubectl set image deployment/like \
-              like={{`{{inputs.parameters.like-image}}`}}
+              like={{ include "fanout.argo" "inputs.parameters.like-image" }}
 
             kubectl rollout status deployment/feed --timeout=180s
             kubectl rollout status deployment/like --timeout=180s
@@ -355,16 +365,16 @@ spec:
             archive:
               none: {}
             s3:
-              key: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/final-report.txt"
+              key: {{ printf "%s/final-report.txt" $artifactPath | quote }}
           - name: final-report-html
             path: /data/final-report.html
             archive:
               none: {}
             s3:
-              key: "reports/{{`{{workflow.creationTimestamp.Y}}`}}-{{`{{workflow.creationTimestamp.m}}`}}-{{`{{workflow.creationTimestamp.d}}`}}/{{`{{workflow.name}}`}}/final-report.html"
+              key: {{ printf "%s/final-report.html" $artifactPath | quote }}
       container:
-        image: "{{`{{workflow.parameters.assistant-image}}`}}"
-        imagePullPolicy: {{ .Values.workflow.assistantImage.pullPolicy }}
+        image: {{ include "fanout.argo" "workflow.parameters.assistant-image" | quote }}
+        imagePullPolicy: {{ $workflow.assistantImage.pullPolicy }}
         command: [bash, -lc]
         args:
           - |
@@ -385,9 +395,9 @@ spec:
             mountPath: /config-html
         env:
           - name: ollama_url
-            value: "{{`{{workflow.parameters.ollama-url}}`}}"
+            value: {{ include "fanout.argo" "workflow.parameters.ollama-url" | quote }}
           - name: COMPARISON_PROMPT_FILE
-            value: "{{`{{workflow.parameters.comparison-prompt-file}}`}}"
+            value: {{ include "fanout.argo" "workflow.parameters.comparison-prompt-file" | quote }}
           - name: BASELINE_FILE
             value: /data/old-report.json
           - name: CANDIDATE_FILE
@@ -397,5 +407,5 @@ spec:
           - name: HTML_REPORT_FILE
             value: /data/final-report.html
           - name: HTML_TEMPLATE_FILE
-            value: "{{`{{workflow.parameters.html-template-file}}`}}"
+            value: {{ include "fanout.argo" "workflow.parameters.html-template-file" | quote }}
 {{- end }}

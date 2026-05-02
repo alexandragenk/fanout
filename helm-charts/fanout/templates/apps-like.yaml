@@ -1,0 +1,73 @@
+{{- $like := .Values.likeService -}}
+{{- $postgres := .Values.postgres -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: like
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: like
+  template:
+    metadata:
+      labels:
+        app: like
+        app.kubernetes.io/name: like
+        metrics_group: like
+    spec:
+      containers:
+        - name: like
+          image: {{ $like.image | quote }}
+          imagePullPolicy: {{ $like.imagePullPolicy }}
+          ports:
+            - containerPort: {{ $like.port }}
+          env:
+            - name: CONFIG_PATH
+              value: /app/config.yaml
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $postgres.secretName }}
+                  key: {{ $postgres.passwordKey }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $postgres.secretName }}
+                  key: {{ $postgres.passwordKey }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ $like.port }}
+            initialDelaySeconds: {{ $like.probes.readinessInitialDelaySeconds }}
+            periodSeconds: {{ $like.probes.readinessPeriodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: {{ $like.port }}
+            initialDelaySeconds: {{ $like.probes.livenessInitialDelaySeconds }}
+            periodSeconds: {{ $like.probes.livenessPeriodSeconds }}
+      volumes:
+        - name: config
+          configMap:
+            name: like-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: like-svc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: like
+spec:
+  selector:
+    app: like
+  ports:
+    - name: http
+      port: {{ $like.port }}
+      targetPort: {{ $like.port }}

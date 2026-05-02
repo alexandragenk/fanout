@@ -1,0 +1,73 @@
+{{- $feed := .Values.feedService -}}
+{{- $postgres := .Values.postgres -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feed
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: feed
+  template:
+    metadata:
+      labels:
+        app: feed
+        app.kubernetes.io/name: feed
+        metrics_group: feed
+    spec:
+      containers:
+        - name: feed
+          image: {{ $feed.image | quote }}
+          imagePullPolicy: {{ $feed.imagePullPolicy }}
+          ports:
+            - containerPort: {{ $feed.port }}
+          env:
+            - name: CONFIG_PATH
+              value: /app/config.yaml
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $postgres.secretName }}
+                  key: {{ $postgres.passwordKey }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $postgres.secretName }}
+                  key: {{ $postgres.passwordKey }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ $feed.port }}
+            initialDelaySeconds: {{ $feed.probes.readinessInitialDelaySeconds }}
+            periodSeconds: {{ $feed.probes.readinessPeriodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: {{ $feed.port }}
+            initialDelaySeconds: {{ $feed.probes.livenessInitialDelaySeconds }}
+            periodSeconds: {{ $feed.probes.livenessPeriodSeconds }}
+      volumes:
+        - name: config
+          configMap:
+            name: feed-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: feed-svc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: feed
+spec:
+  selector:
+    app: feed
+  ports:
+    - name: http
+      port: {{ $feed.port }}
+      targetPort: {{ $feed.port }}

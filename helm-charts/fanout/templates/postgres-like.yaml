@@ -1,0 +1,68 @@
+{{- $postgres := .Values.postgres -}}
+{{- $db := $postgres.likeDb -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: like-db
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: like-db
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: like-db
+  namespace: {{ .Release.Namespace }}
+spec:
+  serviceName: like-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: like-db
+  template:
+    metadata:
+      labels:
+        app: like-db
+        app.kubernetes.io/name: like-db
+        metrics_group: like-db
+    spec:
+      containers:
+        - name: postgres
+          image: {{ $postgres.image | quote }}
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ $postgres.user | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $postgres.secretName }}
+                  key: {{ $postgres.passwordKey }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_DB
+              value: {{ $db.name | quote }}
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", {{ printf "pg_isready -U %s -d %s" $postgres.user $db.name | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+{{- if $postgres.storageClassName }}
+        storageClassName: {{ $postgres.storageClassName | quote }}
+{{- end }}
+        resources:
+          requests:
+            storage: {{ $db.storage | quote }}

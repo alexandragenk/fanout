@@ -1,0 +1,68 @@
+{{- $postgres := .Values.postgres -}}
+{{- $db := $postgres.feedDb -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: feed-db
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: feed-db
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: feed-db
+  namespace: {{ .Release.Namespace }}
+spec:
+  serviceName: feed-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: feed-db
+  template:
+    metadata:
+      labels:
+        app: feed-db
+        app.kubernetes.io/name: feed-db
+        metrics_group: feed-db
+    spec:
+      containers:
+        - name: postgres
+          image: {{ $postgres.image | quote }}
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ $postgres.user | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $postgres.secretName }}
+                  key: {{ $postgres.passwordKey }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_DB
+              value: {{ $db.name | quote }}
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", {{ printf "pg_isready -U %s -d %s" $postgres.user $db.name | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+{{- if $postgres.storageClassName }}
+        storageClassName: {{ $postgres.storageClassName | quote }}
+{{- end }}
+        resources:
+          requests:
+            storage: {{ $db.storage | quote }}

@@ -1,12 +1,6 @@
-namespace:
-  create: false
-  name: fanout
-
 feedService:
-  image:
-    repository: akalashnikova7/fanout-feed
-    tag: latest
-    pullPolicy: Always
+  image: akalashnikova7/fanout-feed:latest
+  imagePullPolicy: Always
   port: 8080
   config:
     runAddress: ":8080"
@@ -20,10 +14,8 @@ feedService:
     livenessPeriodSeconds: 10
 
 likeService:
-  image:
-    repository: akalashnikova7/fanout-like
-    tag: latest
-    pullPolicy: Always
+  image: akalashnikova7/fanout-like:latest
+  imagePullPolicy: Always
   port: 8086
   config:
     runAddress: ":8086"
@@ -36,9 +28,7 @@ likeService:
     livenessPeriodSeconds: 10
 
 postgres:
-  image:
-    repository: postgres
-    tag: 15-alpine
+  image: postgres:15-alpine
   user: postgres
   secretName: fanout-postgres-credentials
   passwordKey: password
@@ -52,9 +42,7 @@ postgres:
 
 ollama:
   enabled: true
-  image:
-    repository: ollama/ollama
-    tag: latest
+  image: ollama/ollama:latest
   port: 11434
   model: gemma4:e4b
 
@@ -80,15 +68,11 @@ artifactRepository:
   minio:
     enabled: true
     serviceName: argo-artifacts
-    image:
-      repository: minio/minio
-      tag: latest
-      pullPolicy: IfNotPresent
+    image: minio/minio:latest
+    imagePullPolicy: IfNotPresent
     bucketInit:
-      image:
-        repository: minio/mc
-        tag: latest
-        pullPolicy: IfNotPresent
+      image: minio/mc:latest
+      imagePullPolicy: IfNotPresent
     dataPath: /data
     storage:
       enabled: true
@@ -106,29 +90,16 @@ workflow:
   template:
     name: fanout-perftest-pipeline
   assistantImage:
-    repository: akalashnikova7/k6
-    tag: latest
+    image: akalashnikova7/k6:latest
     pullPolicy: Always
-  fillImage:
-    repository: curlimages/curl
-    tag: 8.7.1
-  kubectlImage:
-    repository: bitnami/kubectl
-    tag: latest
+  fillImage: curlimages/curl:8.7.1
+  kubectlImage: bitnami/kubectl:latest
   baselineImages:
-    feed:
-      repository: akalashnikova7/fanout-feed
-      tag: latest
-    like:
-      repository: akalashnikova7/fanout-like
-      tag: latest
+    feed: akalashnikova7/fanout-feed:latest
+    like: akalashnikova7/fanout-like:latest
   candidateImages:
-    feed:
-      repository: akalashnikova7/fanout-feed
-      tag: test
-    like:
-      repository: akalashnikova7/fanout-like
-      tag: test
+    feed: akalashnikova7/fanout-feed:test
+    like: akalashnikova7/fanout-like:test
   serviceUrl: http://feed-svc:8080
   prometheusUrl: http://kube-prom-stack-kube-prome-prometheus.monitoring.svc:9090
   ollamaUrl: http://ollama:11434
@@ -141,86 +112,3 @@ workflow:
     enabled: false
     numUsers: 16
     postsPerUser: 16
-
-promqlQueries: |
-  sum(rate(http_request_duration_ms_count{route='feed'}[1m]))
-  sum(rate(http_request_duration_ms_count{route='likes'}[1m]))
-  histogram_quantile(0.50,sum(rate(http_request_duration_ms_bucket{route='feed'}[1m]))by(le))
-  histogram_quantile(0.95,sum(rate(http_request_duration_ms_bucket{route='feed'}[1m]))by(le))
-  histogram_quantile(0.99,sum(rate(http_request_duration_ms_bucket{route='feed'}[1m]))by(le))
-  ((sum(rate(http_request_duration_ms_sum{route='feed'}[1m]))/sum(rate(http_request_duration_ms_count{route='feed'}[1m])))>=0)
-  histogram_quantile(0.50,sum(rate(http_request_duration_ms_bucket{route='likes'}[1m]))by(le))
-  histogram_quantile(0.95,sum(rate(http_request_duration_ms_bucket{route='likes'}[1m]))by(le))
-  histogram_quantile(0.99,sum(rate(http_request_duration_ms_bucket{route='likes'}[1m]))by(le))
-  ((sum(rate(http_request_duration_ms_sum{route='likes'}[1m]))/sum(rate(http_request_duration_ms_count{route='likes'}[1m])))>=0)
-  (100*(sum(rate(http_responses_group_total{route='feed',group='5xx'}[1m]))/sum(rate(http_responses_group_total{route='feed'}[1m])))>=0)
-  (100*(sum(rate(http_responses_group_total{route='likes',group='5xx'}[1m]))/sum(rate(http_responses_group_total{route='likes'}[1m])))>=0)
-  sum(rate(container_fs_reads_total{pod=~'feed-db-.*'}[1m]))
-  sum(rate(container_fs_writes_total{pod=~'feed-db-.*'}[1m]))
-  sum(rate(container_fs_reads_total{pod=~'like-db-.*'}[1m]))
-  sum(rate(container_fs_writes_total{pod=~'like-db-.*'}[1m]))
-  (container_memory_usage_bytes{pod=~'feed-[^-]{9,10}-.+'}/1048576)
-  (container_memory_usage_bytes{pod=~'like-[^-]{9,10}-.+'}/1048576)
-  (container_memory_usage_bytes{pod=~'feed-db-.*'}/1048576)
-  (container_memory_usage_bytes{pod=~'like-db-.*'}/1048576)
-  rate(container_cpu_usage_seconds_total{pod=~'feed-[^-]{9,10}-.+',cpu='total'}[1m])
-  rate(container_cpu_usage_seconds_total{pod=~'like-[^-]{9,10}-.+',cpu='total'}[1m])
-  rate(container_cpu_usage_seconds_total{pod=~'feed-db-.*',cpu='total'}[1m])
-  rate(container_cpu_usage_seconds_total{pod=~'like-db-.*',cpu='total'}[1m])
-
-k6Script: |
-  import http from 'k6/http';
-
-  if (!__ENV.duration) {
-      throw new Error('duration env var is required');
-  }
-
-  if (!__ENV.service_url) {
-      throw new Error('service_url env var is required');
-  }
-
-  const testDuration = __ENV.duration;
-
-  export const options = {
-      vus: 50,
-      duration: testDuration,
-  };
-
-  const base_url = __ENV.service_url;
-
-  export default function () {
-      http.get(base_url + '/feed', {
-          headers: {
-              'X-User-Id': String(__VU),
-          },
-      });
-  }
-
-comparisonPrompt: |
-  Проведено два нагрузочных запуска распределённого приложения.
-
-  Ниже приведён вывод k6 первого запуска baseline:
-  {{BASELINE_K6}}
-
-  Ниже приведён вывод k6 второго запуска candidate:
-  {{CANDIDATE_K6}}
-
-  Ниже приведено численное сравнение Prometheus-метрик.
-  Это основной источник истины для сравнения baseline и candidate:
-
-  {{COMPARISON_LINES}}
-
-  Топ-5 метрик с наибольшим ростом:
-  {{TOP_REGRESSIONS}}
-
-  Топ-5 метрик с наибольшим снижением:
-  {{TOP_IMPROVEMENTS}}
-
-  Нужно:
-  1. Оценить k6 baseline и k6 candidate.
-  2. Сравнить именно Prometheus-метрики из списка выше, ссылаясь на конкретные query и числа.
-  3. Найти деградации и улучшения.
-  4. Указать наиболее вероятные узкие места.
-  5. Если какие-то diff близки к нулю, считать их несущественными и не делать на них сильных выводов.
-  6. Сделать краткий итоговый вывод.
-  7. Не писать, что числовые метрики отсутствуют: они приведены выше в явном виде.

@@ -1,22 +1,23 @@
-{{- if .Values.observability.serviceMonitor.enabled }}
+{{- $serviceMonitor := .Values.observability.serviceMonitor -}}
+{{- if $serviceMonitor.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: feed
-  namespace: {{ .Values.observability.serviceMonitor.namespace }}
+  namespace: {{ $serviceMonitor.namespace }}
   labels:
-    release: {{ .Values.observability.serviceMonitor.releaseLabel }}
+    release: {{ $serviceMonitor.releaseLabel }}
 spec:
   namespaceSelector:
     matchNames:
-      - {{ include "fanout.namespace" . }}
+      - {{ .Release.Namespace }}
   selector:
     matchLabels:
       app: feed
   endpoints:
     - port: http
       path: /metrics
-      interval: {{ .Values.observability.serviceMonitor.interval }}
+      interval: {{ $serviceMonitor.interval }}
   targetLabels:
     - app
   podTargetLabels:
@@ -27,20 +28,20 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: like
-  namespace: {{ .Values.observability.serviceMonitor.namespace }}
+  namespace: {{ $serviceMonitor.namespace }}
   labels:
-    release: {{ .Values.observability.serviceMonitor.releaseLabel }}
+    release: {{ $serviceMonitor.releaseLabel }}
 spec:
   namespaceSelector:
     matchNames:
-      - {{ include "fanout.namespace" . }}
+      - {{ .Release.Namespace }}
   selector:
     matchLabels:
       app: like
   endpoints:
     - port: http
       path: /metrics
-      interval: {{ .Values.observability.serviceMonitor.interval }}
+      interval: {{ $serviceMonitor.interval }}
   targetLabels:
     - app
   podTargetLabels:
