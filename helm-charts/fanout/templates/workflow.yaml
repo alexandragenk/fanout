@@ -104,10 +104,6 @@ spec:
         value: {{ .Values.workflow.ollamaUrl | quote }}
       - name: duration
         value: {{ .Values.workflow.duration | quote }}
-      - name: collect-script
-        value: {{ .Values.workflow.collectScript | quote }}
-      - name: compare-script
-        value: {{ .Values.workflow.compareScript | quote }}
       - name: promql-queries-file
         value: {{ .Values.workflow.promqlQueriesFile | quote }}
       - name: k6-script-file
@@ -302,7 +298,7 @@ spec:
             set -euo pipefail
             echo "Starting collect-only assistant step"
             echo "REPORT_FILE=$REPORT_FILE"
-            "{{`{{workflow.parameters.collect-script}}`}}"
+            /assistant-scripts/run_stress_collect.sh
         volumeMounts:
           - name: metrics-storage
             mountPath: /data
@@ -377,7 +373,7 @@ spec:
             echo "BASELINE_FILE=$BASELINE_FILE"
             echo "CANDIDATE_FILE=$CANDIDATE_FILE"
             echo "REPORT_FILE=$REPORT_FILE"
-            "{{`{{workflow.parameters.compare-script}}`}}"
+            /assistant-scripts/compare_and_analyze.sh
         volumeMounts:
           - name: metrics-storage
             mountPath: /data

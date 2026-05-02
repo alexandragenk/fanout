@@ -133,8 +133,6 @@ workflow:
   prometheusUrl: http://kube-prom-stack-kube-prome-prometheus.monitoring.svc:9090
   ollamaUrl: http://ollama:11434
   duration: 2m
-  collectScript: /assistant-scripts/run_stress_collect.sh
-  compareScript: /assistant-scripts/compare_and_analyze.sh
   promqlQueriesFile: /config/queries.txt
   k6ScriptFile: /config-k6/load_k6_feed.js
   comparisonPromptFile: /config-prompts/comparison-prompt.txt
