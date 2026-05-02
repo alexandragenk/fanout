@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/alexandragenk/fanout.git
-    targetRevision: test
+    targetRevision: master
     path: helm-charts/fanout
   destination:
     server: https://kubernetes.default.svc

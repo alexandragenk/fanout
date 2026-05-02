@@ -105,7 +105,7 @@ helm upgrade --install kube-prom-stack prometheus-community/kube-prometheus-stac
 - `akalashnikova7/fanout-like:latest`
 - `akalashnikova7/k6:latest`
 - репозиторий `https://github.com/alexandragenk/fanout.git`
-- ветка `test`
+- ветка `master`
 
 Если вы используете свой registry, branch или fork, обновите `helm-charts/fanout/values.yaml`:
 
