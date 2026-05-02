@@ -79,9 +79,13 @@ spec:
     - name: promql-config
       configMap:
         name: promql-queries-config
-    - name: assistant-scripts-config
+    - name: assistant-collect-script-config
       configMap:
-        name: assistant-scripts-config
+        name: assistant-collect-script-config
+        defaultMode: 0555
+    - name: assistant-compare-script-config
+      configMap:
+        name: assistant-compare-script-config
         defaultMode: 0555
     - name: k6-scripts-config
       configMap:
@@ -314,7 +318,7 @@ spec:
             mountPath: /data
           - name: promql-config
             mountPath: /config
-          - name: assistant-scripts-config
+          - name: assistant-collect-script-config
             mountPath: /assistant-scripts
           - name: k6-scripts-config
             mountPath: /config-k6
@@ -387,7 +391,7 @@ spec:
         volumeMounts:
           - name: metrics-storage
             mountPath: /data
-          - name: assistant-scripts-config
+          - name: assistant-compare-script-config
             mountPath: /assistant-scripts
           - name: llm-prompts-config
             mountPath: /config-prompts

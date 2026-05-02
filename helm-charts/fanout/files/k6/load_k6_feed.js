@@ -1,19 +1,41 @@
 import http from 'k6/http';
 
-if (!__ENV.duration) {
-    throw new Error('duration env var is required');
-}
+const configPath = __ENV.K6_CONFIG_FILE || '/config-k6/config.json';
+const config = JSON.parse(open(configPath));
 
 if (!__ENV.service_url) {
     throw new Error('service_url env var is required');
 }
 
-const testDuration = __ENV.duration;
+const testDuration = __ENV.duration || config.duration;
 
-export const options = {
-    vus: 50,
-    duration: testDuration,
-};
+if (!testDuration) {
+    throw new Error('duration env var or config duration is required');
+}
+
+function buildOptions() {
+    if (config.mode === 'rps') {
+        return {
+            scenarios: {
+                feed_rps: {
+                    executor: 'constant-arrival-rate',
+                    rate: Number(config.rps),
+                    timeUnit: config.timeUnit || '1s',
+                    duration: testDuration,
+                    preAllocatedVUs: Number(config.preAllocatedVUs),
+                    maxVUs: Number(config.maxVUs),
+                },
+            },
+        };
+    }
+
+    return {
+        vus: Number(config.vus || 50),
+        duration: testDuration,
+    };
+}
+
+export const options = buildOptions();
 
 const base_url = __ENV.service_url;
 
