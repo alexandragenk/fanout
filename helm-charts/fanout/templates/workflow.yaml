@@ -3,11 +3,14 @@
 {{- $artifactRepository := .Values.artifactRepository -}}
 {{- $feed := .Values.feedService -}}
 {{- $like := .Values.likeService -}}
-{{- $workflowName := include "fanout.argo" "workflow.name" -}}
 {{- $workflowYear := include "fanout.argo" "workflow.creationTimestamp.Y" -}}
 {{- $workflowMonth := include "fanout.argo" "workflow.creationTimestamp.m" -}}
 {{- $workflowDay := include "fanout.argo" "workflow.creationTimestamp.d" -}}
-{{- $artifactPath := printf "reports/%s-%s-%s/%s" $workflowYear $workflowMonth $workflowDay $workflowName -}}
+{{- $workflowHour := include "fanout.argo" "workflow.creationTimestamp.H" -}}
+{{- $workflowMinute := include "fanout.argo" "workflow.creationTimestamp.M" -}}
+{{- $workflowSecond := include "fanout.argo" "workflow.creationTimestamp.S" -}}
+{{- $workflowStartedAt := printf "%s-%s-%s_%s-%s-%s" $workflowYear $workflowMonth $workflowDay $workflowHour $workflowMinute $workflowSecond -}}
+{{- $artifactPath := printf "reports/%s" $workflowStartedAt -}}
 {{- if $workflow.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim

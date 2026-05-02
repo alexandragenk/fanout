@@ -68,6 +68,4 @@ html_report="${html_report//__ANALYSIS_JSON__/$analysis_json}"
 
 printf "%s\n" "$html_report" > "$HTML_REPORT_FILE"
 
-echo "$report"
 echo "HTML report saved to $HTML_REPORT_FILE"
-echo "Open report: $HTML_REPORT_FILE"
