@@ -368,7 +368,6 @@ spec:
             echo "Starting final compare-and-analyze step"
             echo "BASELINE_FILE=$BASELINE_FILE"
             echo "CANDIDATE_FILE=$CANDIDATE_FILE"
-            echo "REPORT_FILE=$REPORT_FILE"
             /assistant-scripts/compare_and_analyze.sh
         volumeMounts:
           - name: metrics-storage
@@ -388,8 +387,6 @@ spec:
             value: /data/old-report.json
           - name: CANDIDATE_FILE
             value: /data/new-report.json
-          - name: REPORT_FILE
-            value: /data/final-report.txt
           - name: HTML_REPORT_FILE
             value: /data/final-report.html
           - name: HTML_TEMPLATE_FILE
