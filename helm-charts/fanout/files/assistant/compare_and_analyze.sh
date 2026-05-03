@@ -24,18 +24,13 @@ candidate=$(cat "$CANDIDATE_FILE")
 
 baseline_k6=$(jq -r '.k6_output' <<< "$baseline")
 candidate_k6=$(jq -r '.k6_output' <<< "$candidate")
-baseline_metrics=$(jq -r '
-  .metrics_agg
-  | to_entries
-  | map("\(.key): avg=\(.value.avg), max=\(.value.max)")
-  | join("\n")
+common_metrics=$(jq -r --argjson candidate "$candidate" '
+  (.metrics_agg // {}) as $ethalon
+  | ($candidate.metrics_agg // {}) as $test
+  | (($ethalon | keys_unsorted) + ($test | keys_unsorted) | unique[])
+  | . as $metric
+  | "\($metric): ethalon_avg=\($ethalon[$metric].avg // "null"), ethalon_max=\($ethalon[$metric].max // "null"), test_avg=\($test[$metric].avg // "null"), test_max=\($test[$metric].max // "null")"
 ' <<< "$baseline")
-candidate_metrics=$(jq -r '
-  .metrics_agg
-  | to_entries
-  | map("\(.key): avg=\(.value.avg), max=\(.value.max)")
-  | join("\n")
-' <<< "$candidate")
 
 until curl -sf "$ollama_url/api/tags" | grep -q '"name"'; do
   echo "Waiting for LLM readiness..."
@@ -43,10 +38,12 @@ until curl -sf "$ollama_url/api/tags" | grep -q '"name"'; do
 done
 
 prompt=$(cat "$COMPARISON_PROMPT_FILE")
+
+echo "$prompt"
+
 prompt="${prompt//\{\{BASELINE_K6\}\}/$baseline_k6}"
 prompt="${prompt//\{\{CANDIDATE_K6\}\}/$candidate_k6}"
-prompt="${prompt//\{\{BASELINE_METRICS\}\}/$baseline_metrics}"
-prompt="${prompt//\{\{CANDIDATE_METRICS\}\}/$candidate_metrics}"
+prompt="${prompt//\{\{COMMON_METRICS\}\}/$common_metrics}"
 
 echo "$prompt"
 
