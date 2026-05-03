@@ -3,32 +3,32 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: like-db
+  name: db-like
   namespace: {{ .Release.Namespace }}
 spec:
   ports:
     - port: 5432
       targetPort: 5432
   selector:
-    app: like-db
+    app: db-like
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: like-db
+  name: db-like
   namespace: {{ .Release.Namespace }}
 spec:
-  serviceName: like-db
+  serviceName: db-like
   replicas: 1
   selector:
     matchLabels:
-      app: like-db
+      app: db-like
   template:
     metadata:
       labels:
-        app: like-db
-        app.kubernetes.io/name: like-db
-        metrics_group: like-db
+        app: db-like
+        app.kubernetes.io/name: db-like
+        metrics_group: db-like
     spec:
       containers:
         - name: postgres

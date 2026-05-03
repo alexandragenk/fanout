@@ -27,7 +27,7 @@ candidate_k6=$(jq -r '.k6_output' <<< "$candidate")
 common_metrics=$(jq -r --argjson candidate "$candidate" '
   (.metrics_agg // {}) as $ethalon
   | ($candidate.metrics_agg // {}) as $test
-  | (($ethalon | keys_unsorted) + ($test | keys_unsorted) | unique[])
+  | (($ethalon | keys_unsorted) + (($test | keys_unsorted) - ($ethalon | keys_unsorted)))[]
   | . as $metric
   | "\($metric): ethalon_avg=\($ethalon[$metric].avg // "null"), ethalon_max=\($ethalon[$metric].max // "null"), test_avg=\($test[$metric].avg // "null"), test_max=\($test[$metric].max // "null")"
 ' <<< "$baseline")
@@ -38,9 +38,6 @@ until curl -sf "$ollama_url/api/tags" | grep -q '"name"'; do
 done
 
 prompt=$(cat "$COMPARISON_PROMPT_FILE")
-
-echo "$prompt"
-
 prompt="${prompt//\{\{BASELINE_K6\}\}/$baseline_k6}"
 prompt="${prompt//\{\{CANDIDATE_K6\}\}/$candidate_k6}"
 prompt="${prompt//\{\{COMMON_METRICS\}\}/$common_metrics}"

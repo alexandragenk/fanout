@@ -3,32 +3,32 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: feed-db
+  name: db-feed
   namespace: {{ .Release.Namespace }}
 spec:
   ports:
     - port: 5432
       targetPort: 5432
   selector:
-    app: feed-db
+    app: db-feed
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: feed-db
+  name: db-feed
   namespace: {{ .Release.Namespace }}
 spec:
-  serviceName: feed-db
+  serviceName: db-feed
   replicas: 1
   selector:
     matchLabels:
-      app: feed-db
+      app: db-feed
   template:
     metadata:
       labels:
-        app: feed-db
-        app.kubernetes.io/name: feed-db
-        metrics_group: feed-db
+        app: db-feed
+        app.kubernetes.io/name: db-feed
+        metrics_group: db-feed
     spec:
       containers:
         - name: postgres

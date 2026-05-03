@@ -61,7 +61,7 @@ func TestHandler_Integration(t *testing.T) {
 
 func newMux(t *testing.T) http.Handler {
 	cfg := &config.FeedConfig{
-		DatabaseURI:    "postgres://postgres@feed-db:5432/feed",
+		DatabaseURI:    "postgres://postgres@db-feed:5432/feed",
 		MigrationsPath: "file://../../migrations",
 	}
 	repo, err := repository.NewFeedRepo(cfg)

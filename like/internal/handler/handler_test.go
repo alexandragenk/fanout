@@ -80,7 +80,7 @@ func TestLikeHandler_Integration(t *testing.T) {
 
 func newLikeMux(t *testing.T) http.Handler {
 	cfg := &config.LikeConfig{
-		DatabaseURI:    "postgres://postgres@like-db:5432/like",
+		DatabaseURI:    "postgres://postgres@db-like:5432/like",
 		MigrationsPath: "file://../../migrations",
 	}
 	repo, err := repository.NewLikeRepo(cfg)
