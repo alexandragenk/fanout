@@ -81,12 +81,12 @@
 
     const metricSets = Object.entries(metrics);
     const colors = ["#306d8c", "#b91c1c"];
+    const metricNames = Object.keys(metricSets[0]?.[1]);
 
-    for (const [metricSetIndex, [metricSetName, metricSet]] of metricSets.entries()) {
-        const color = colors[metricSetIndex % metricSets.length];
-
-        for (const [metricName, values] of Object.entries(metricSet || {})) {
-            drawChart(metricName + metricSetName, values, color);
+    for (const metricName of metricNames) {
+        for (const [metricSetIndex, [metricSetName, metricSet]] of metricSets.entries()) {
+            const color = colors[metricSetIndex % colors.length];
+            drawChart(metricName + metricSetName, metricSet[metricName], color);
         }
     }
 
