@@ -107,7 +107,10 @@ workflow:
   promqlQueriesFile: /config/queries.txt
   k6ScriptFile: /config-k6/load_k6_feed.js
   comparisonPromptFile: /config-prompts/comparison-prompt.txt
+  runAnalysisPromptFile: /config-prompts/run-analysis-prompt.txt
   htmlTemplateFile: /config-html/template.html
+  runAnalysis:
+    enabled: true
   seedData:
     enabled: false
     numUsers: 16

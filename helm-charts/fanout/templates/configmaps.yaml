@@ -40,6 +40,8 @@ metadata:
 data:
   compare_and_analyze.sh: |
 {{- .Files.Get "files/assistant/compare_and_analyze.sh" | nindent 4 }}
+  analyze_run.sh: |
+{{- .Files.Get "files/assistant/analyze_run.sh" | nindent 4 }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -69,6 +71,8 @@ metadata:
 data:
   comparison-prompt.txt: |
 {{- .Files.Get "files/prompts/comparison-prompt.txt" | nindent 4 }}
+  run-analysis-prompt.txt: |
+{{- .Files.Get "files/prompts/run-analysis-prompt.txt" | nindent 4 }}
 ---
 apiVersion: v1
 kind: ConfigMap

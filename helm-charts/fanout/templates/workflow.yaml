@@ -117,6 +117,8 @@ spec:
         value: {{ $workflow.seedData.numUsers | quote }}
       - name: seed-data-posts-per-user
         value: {{ $workflow.seedData.postsPerUser | quote }}
+      - name: run-analysis-enabled
+        value: {{ $workflow.runAnalysis.enabled | quote }}
 
   templates:
     - name: main
@@ -154,8 +156,21 @@ spec:
                 - name: k6-html-artifact-key
                   value: {{ printf "%s/old-k6-report.html" $artifactPath | quote }}
 
-          - name: deploy-new-version
+          - name: analyze-baseline
             depends: run-baseline
+            template: analyze-run
+            when: {{ printf "%s == true" (include "fanout.argo" "workflow.parameters.run-analysis-enabled") | quote }}
+            arguments:
+              parameters:
+                - name: report-file
+                  value: /data/old-report.json
+                - name: html-report-file
+                  value: /data/old-analysis.html
+                - name: html-artifact-key
+                  value: {{ printf "%s/old-analysis.html" $artifactPath | quote }}
+
+          - name: deploy-new-version
+            depends: "analyze-baseline.Succeeded || analyze-baseline.Skipped"
             template: deploy
             arguments:
               parameters:
@@ -186,8 +201,21 @@ spec:
                 - name: k6-html-artifact-key
                   value: {{ printf "%s/new-k6-report.html" $artifactPath | quote }}
 
-          - name: compare-reports
+          - name: analyze-candidate
             depends: run-candidate
+            template: analyze-run
+            when: {{ printf "%s == true" (include "fanout.argo" "workflow.parameters.run-analysis-enabled") | quote }}
+            arguments:
+              parameters:
+                - name: report-file
+                  value: /data/new-report.json
+                - name: html-report-file
+                  value: /data/new-analysis.html
+                - name: html-artifact-key
+                  value: {{ printf "%s/new-analysis.html" $artifactPath | quote }}
+
+          - name: compare-reports
+            depends: "analyze-candidate.Succeeded || analyze-candidate.Skipped"
             template: compare-and-analyze
 
     - name: wait-services
@@ -325,6 +353,51 @@ spec:
           - name: K6_HTML_REPORT_FILE
             value: {{ include "fanout.argo" "inputs.parameters.k6-html-report-file" | quote }}
 
+    - name: analyze-run
+      inputs:
+        parameters:
+          - name: report-file
+          - name: html-report-file
+          - name: html-artifact-key
+      outputs:
+        artifacts:
+          - name: run-analysis-html
+            path: {{ include "fanout.argo" "inputs.parameters.html-report-file" | quote }}
+            archive:
+              none: {}
+            s3:
+              key: {{ include "fanout.argo" "inputs.parameters.html-artifact-key" | quote }}
+      container:
+        image: {{ $workflow.assistantImage.image | quote }}
+        imagePullPolicy: {{ $workflow.assistantImage.pullPolicy }}
+        command: [bash, -lc]
+        args:
+          - |
+            set -euo pipefail
+            echo "Starting single-run analysis step"
+            echo "RUN_REPORT_FILE=$RUN_REPORT_FILE"
+            /assistant-scripts/analyze_run.sh
+        volumeMounts:
+          - name: metrics-storage
+            mountPath: /data
+          - name: assistant-compare-script-config
+            mountPath: /assistant-scripts
+          - name: llm-prompts-config
+            mountPath: /config-prompts
+          - name: html-template-config
+            mountPath: /config-html
+        env:
+          - name: ollama_url
+            value: {{ $workflow.ollamaUrl | quote }}
+          - name: RUN_ANALYSIS_PROMPT_FILE
+            value: {{ $workflow.runAnalysisPromptFile | quote }}
+          - name: RUN_REPORT_FILE
+            value: {{ include "fanout.argo" "inputs.parameters.report-file" | quote }}
+          - name: HTML_REPORT_FILE
+            value: {{ include "fanout.argo" "inputs.parameters.html-report-file" | quote }}
+          - name: HTML_TEMPLATE_FILE
+            value: {{ $workflow.htmlTemplateFile | quote }}
+
     - name: deploy
       inputs:
         parameters:
@@ -349,12 +422,6 @@ spec:
     - name: compare-and-analyze
       outputs:
         artifacts:
-          - name: final-report-text
-            path: /data/final-report.txt
-            archive:
-              none: {}
-            s3:
-              key: {{ printf "%s/final-report.txt" $artifactPath | quote }}
           - name: final-report-html
             path: /data/final-report.html
             archive:
