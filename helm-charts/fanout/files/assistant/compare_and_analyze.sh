@@ -58,11 +58,15 @@ metrics_json=$(jq -cn \
   --argjson candidate "$candidate_metrics_json" \
   '{" [baseline]": $baseline, " [candidate]": $candidate}')
 
-html_report=$(cat "$HTML_TEMPLATE_FILE")
-html_report="${html_report//__REPORT_DATE__/$generated_at}"
-html_report="${html_report//__METRICS_JSON__/$metrics_json}"
-html_report="${html_report//__ANALYSIS_JSON__/$analysis_json}"
-
-printf "%s\n" "$html_report" > "$HTML_REPORT_FILE"
+jq -Rrn \
+  --rawfile template "$HTML_TEMPLATE_FILE" \
+  --arg generated_at "$generated_at" \
+  --argjson metrics "$metrics_json" \
+  --argjson analysis "$analysis_json" \
+  '$template
+    | gsub("__REPORT_DATE__"; $generated_at)
+    | gsub("__METRICS_JSON__"; ($metrics | tojson))
+    | gsub("__ANALYSIS_JSON__"; ($analysis | tojson))' \
+  > "$HTML_REPORT_FILE"
 
 echo "HTML report saved to $HTML_REPORT_FILE"
