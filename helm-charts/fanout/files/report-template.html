@@ -38,8 +38,7 @@
 <div class="container">
     <h1>Отчет __REPORT_DATE__</h1>
 <script>
-    const baselineMetrix = __BASELINE_METRICS_JSON__;
-    const candidateMetrix = __CANDIDATE_METRICS_JSON__;
+    const metrics = __METRICS_JSON__;
     const analysis = __ANALYSIS_JSON__;
 
     marked.use(markedKatex({
@@ -56,7 +55,7 @@
         if (values && values.length > 0) {
             const timestamps = values.map(v => v[0]);
             const testValues = values.map(v => v[1]);
-
+    
             const data = [timestamps, testValues];
 
             const opts = {
@@ -80,14 +79,15 @@
         chart.appendChild(description);
     }
 
-    const allKeys = Array.from(new Set([
-        ...Object.keys(baselineMetrix || {}),
-        ...Object.keys(candidateMetrix || {})
-    ]));
+    const metricSets = Object.entries(metrics);
+    const colors = ["#306d8c", "#b91c1c"];
 
-    for (const key of allKeys) {
-        drawChart(key + " [baseline]", baselineMetrix[key], "#306d8c");
-        drawChart(key + " [candidate]", candidateMetrix[key], "#b91c1c");
+    for (const [metricSetIndex, [metricSetName, metricSet]] of metricSets.entries()) {
+        const color = colors[metricSetIndex % metricSets.length];
+
+        for (const [metricName, values] of Object.entries(metricSet || {})) {
+            drawChart(metricName + metricSetName, values, color);
+        }
     }
 
     const summary = document.createElement("div");

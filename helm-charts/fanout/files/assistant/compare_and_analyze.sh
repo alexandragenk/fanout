@@ -53,11 +53,14 @@ analysis_json=$(curl -s "$ollama_url/api/generate" -d "{
 generated_at=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 baseline_metrics_json=$(jq -c '.metrics' <<< "$baseline")
 candidate_metrics_json=$(jq -c '.metrics' <<< "$candidate")
+metrics_json=$(jq -cn \
+  --argjson baseline "$baseline_metrics_json" \
+  --argjson candidate "$candidate_metrics_json" \
+  '{" [baseline]": $baseline, " [candidate]": $candidate}')
 
 html_report=$(cat "$HTML_TEMPLATE_FILE")
 html_report="${html_report//__REPORT_DATE__/$generated_at}"
-html_report="${html_report//__BASELINE_METRICS_JSON__/$baseline_metrics_json}"
-html_report="${html_report//__CANDIDATE_METRICS_JSON__/$candidate_metrics_json}"
+html_report="${html_report//__METRICS_JSON__/$metrics_json}"
 html_report="${html_report//__ANALYSIS_JSON__/$analysis_json}"
 
 printf "%s\n" "$html_report" > "$HTML_REPORT_FILE"
