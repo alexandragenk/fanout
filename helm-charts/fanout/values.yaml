@@ -105,6 +105,7 @@ workflow:
   ollamaUrl: http://ollama:11434
   llmTemperature: 0.1
   duration: 2m
+  warmupDuration: 1m
   promqlQueriesFile: /config/queries.txt
   k6ScriptFile: /config-k6/load_k6_feed.js
   comparisonPromptFile: /config-prompts/comparison-prompt.txt
@@ -114,5 +115,5 @@ workflow:
     enabled: true
   seedData:
     enabled: false
-    numUsers: 16
+    numUsers: 64
     postsPerUser: 16

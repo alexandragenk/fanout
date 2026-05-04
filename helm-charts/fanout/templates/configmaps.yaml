@@ -26,6 +26,15 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: seed-data-script-config
+  namespace: {{ .Release.Namespace }}
+data:
+  seed_data.sh: |
+{{- .Files.Get "files/assistant/seed_data.sh" | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: assistant-collect-script-config
   namespace: {{ .Release.Namespace }}
 data:

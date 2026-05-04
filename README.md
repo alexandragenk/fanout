@@ -189,7 +189,7 @@ argo submit -n fanout --from workflowtemplate/fanout-perftest-pipeline
 ```bash
 argo submit -n fanout --from workflowtemplate/fanout-perftest-pipeline \
   -p seed-data-enabled=true \
-  -p seed-data-num-users=16 \
+  -p seed-data-num-users=64 \
   -p seed-data-posts-per-user=16
 ```
 
@@ -198,14 +198,15 @@ Pipeline выполняет шаги:
 1. `deploy-main-version` — разворачивает baseline-образы
 2. `wait-services` — ждёт готовности сервисов, Prometheus и Ollama
 3. `seed-data` — опционально наполняет приложение данными, если `seed-data-enabled=true`
-4. `run-baseline` — запускает k6 и собирает Prometheus-метрики
-5. `analyze-baseline` — опционально анализирует только baseline-прогон
-6. `deploy-new-version` — разворачивает candidate-образы
-7. `wait-services-new`
-8. `cool-down-before-candidate`
-9. `run-candidate` — повторно запускает k6 и собирает метрики
-10. `analyze-candidate` — опционально анализирует только candidate-прогон
-11. `compare-reports` — сравнивает baseline/candidate и отправляет данные в Ollama для анализа
+4. `warm-up-baseline` — прогревает baseline k6-нагрузкой в течение 1 минуты
+5. `run-baseline` — запускает k6 и собирает Prometheus-метрики
+6. `analyze-baseline` — опционально анализирует только baseline-прогон
+7. `deploy-new-version` — разворачивает candidate-образы
+8. `wait-services-new`
+9. `warm-up-candidate` — прогревает candidate k6-нагрузкой в течение 1 минуты
+10. `run-candidate` — повторно запускает k6 и собирает метрики
+11. `analyze-candidate` — опционально анализирует только candidate-прогон
+12. `compare-reports` — сравнивает baseline/candidate и отправляет данные в Ollama для анализа
 
 ## Отчёты И Artifacts
 
@@ -254,6 +255,7 @@ JSON-отчёты содержат:
 Сбор метрик настраивается в `helm-charts/fanout/values.yaml`:
 
 - `workflow.duration` управляет длительностью k6-теста и окном агрегации Prometheus
+- `workflow.warmupDuration` управляет длительностью k6-прогрева перед каждым замером, по умолчанию `1m`
 - `workflow.serviceUrl` задаёт target для k6, по умолчанию `http://feed-svc:8080`
 - `workflow.prometheusUrl` указывает на kube-prometheus-stack
 - `workflow.llmTemperature` задаёт температуру LLM для анализа, по умолчанию `0.1`

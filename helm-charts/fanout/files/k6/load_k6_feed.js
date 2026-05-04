@@ -30,7 +30,7 @@ function buildOptions() {
     }
 
     return {
-        vus: Number(config.vus || 50),
+        vus: Number(config.vus || 64),
         duration: testDuration,
     };
 }

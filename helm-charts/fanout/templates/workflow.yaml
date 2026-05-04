@@ -90,6 +90,10 @@ spec:
       configMap:
         name: assistant-compare-script-config
         defaultMode: 0555
+    - name: seed-data-script-config
+      configMap:
+        name: seed-data-script-config
+        defaultMode: 0555
     - name: k6-scripts-config
       configMap:
         name: k6-scripts-config
@@ -111,6 +115,8 @@ spec:
         value: {{ $workflow.candidateImages.like | quote }}
       - name: duration
         value: {{ $workflow.duration | quote }}
+      - name: warmup-duration
+        value: {{ $workflow.warmupDuration | default "1m" | quote }}
       - name: seed-data-enabled
         value: {{ $workflow.seedData.enabled | quote }}
       - name: seed-data-num-users
@@ -142,8 +148,12 @@ spec:
             template: seed-data
             when: {{ printf "%s == true" (include "fanout.argo" "workflow.parameters.seed-data-enabled") | quote }}
 
-          - name: run-baseline
+          - name: warm-up-baseline
             depends: "seed-data.Succeeded || seed-data.Skipped"
+            template: run-k6-warmup
+
+          - name: run-baseline
+            depends: warm-up-baseline
             template: run-assistant-collect
             arguments:
               parameters:
@@ -183,12 +193,12 @@ spec:
             depends: deploy-new-version
             template: wait-services
 
-          - name: cool-down-before-candidate
+          - name: warm-up-candidate
             depends: wait-services-new
-            template: sleep
+            template: run-k6-warmup
 
           - name: run-candidate
-            depends: cool-down-before-candidate
+            depends: warm-up-candidate
             template: run-assistant-collect
             arguments:
               parameters:
@@ -234,66 +244,49 @@ spec:
             until curl -sf {{ $workflow.ollamaUrl }}/api/tags >/dev/null; do echo waiting ollama; sleep 5; done
             echo "ollama readiness check passed"
 
-    - name: sleep
+    - name: run-k6-warmup
       container:
-        image: {{ $workflow.fillImage | quote }}
-        command: [sh, -c]
+        image: {{ $workflow.assistantImage.image | quote }}
+        imagePullPolicy: {{ $workflow.assistantImage.pullPolicy }}
+        command: [bash, -lc]
         args:
           - |
-            set -eu
-            echo "Sleeping for {{ include "fanout.argo" "workflow.parameters.duration" }} before candidate run"
-            sleep {{ include "fanout.argo" "workflow.parameters.duration" }}
+            set -euo pipefail
+            echo "Starting k6 warm-up for {{ include "fanout.argo" "workflow.parameters.warmup-duration" }}"
+            k6 run --quiet \
+              -e service_url="$service_url" \
+              -e duration="$duration" \
+              -e K6_CONFIG_FILE="$K6_CONFIG_FILE" \
+              "$K6_SCRIPT_FILE"
+        volumeMounts:
+          - name: k6-scripts-config
+            mountPath: /config-k6
+        env:
+          - name: service_url
+            value: {{ $workflow.serviceUrl | quote }}
+          - name: duration
+            value: {{ include "fanout.argo" "workflow.parameters.warmup-duration" | quote }}
+          - name: K6_SCRIPT_FILE
+            value: {{ $workflow.k6ScriptFile | quote }}
+          - name: K6_CONFIG_FILE
+            value: /config-k6/config.json
 
     - name: seed-data
-      script:
+      container:
         image: alpine:3.19
-        command: [sh]
-        source: |
-          set -eux
-
-          apk add --no-cache curl jq
-
-          API_URL="http://feed-svc:{{ $feed.port }}"
-          NUM_USERS={{ include "fanout.argo" "workflow.parameters.seed-data-num-users" | quote }}
-          POSTS_PER_USER={{ include "fanout.argo" "workflow.parameters.seed-data-posts-per-user" | quote }}
-
-          echo "Starting subscription process..."
-          for i in $(seq 1 $NUM_USERS); do
-            for j in $(seq 1 $NUM_USERS); do
-              if [ "$i" -eq "$j" ]; then continue; fi
-              curl -s -X POST "$API_URL/subscribe" \
-                -H "X-User-Id: $i" \
-                -H "Content-Type: application/json" \
-                -d "{\"user_id\": $j}" > /dev/null
-            done
-            echo "User $i subscribed to all others."
-          done
-
-          echo "Starting post creation..."
-          for i in $(seq 1 $NUM_USERS); do
-            for p in $(seq 1 $POSTS_PER_USER); do
-              curl -s -X POST "$API_URL/post" \
-                -H "X-User-Id: $i" \
-                -H "Content-Type: application/json" \
-                -d "{\"text\": \"Post #$p from User #$i\"}" > /dev/null
-            done
-            echo "User $i created $POSTS_PER_USER posts."
-          done
-
-          echo "Starting like process..."
-          for i in $(seq 1 $NUM_USERS); do
-            FEED=$(curl -s "$API_URL/feed?count=2000" -H "X-User-Id: $i")
-            POST_IDS=$(echo "$FEED" | jq -r '.[].postId')
-
-            for pid in $POST_IDS; do
-              curl -s -X POST "$API_URL/like" \
-                -H "X-User-Id: $i" \
-                -H "Content-Type: application/json" \
-                -d "{\"postId\": $pid}" > /dev/null
-            done
-          done
-
-          echo "Done!"
+        command: [sh, -c]
+        args:
+          - /seed-scripts/seed_data.sh
+        volumeMounts:
+          - name: seed-data-script-config
+            mountPath: /seed-scripts
+        env:
+          - name: API_URL
+            value: {{ printf "http://feed-svc:%v" $feed.port | quote }}
+          - name: NUM_USERS
+            value: {{ include "fanout.argo" "workflow.parameters.seed-data-num-users" | quote }}
+          - name: POSTS_PER_USER
+            value: {{ include "fanout.argo" "workflow.parameters.seed-data-posts-per-user" | quote }}
 
     - name: run-assistant-collect
       inputs:
