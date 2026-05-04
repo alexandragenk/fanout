@@ -3,6 +3,7 @@ set -euo pipefail
 
 : "${ollama_url:?ollama_url env var is required}"
 
+LLM_TEMPERATURE="${LLM_TEMPERATURE:-0.1}"
 BASELINE_FILE="${BASELINE_FILE:?BASELINE_FILE env var is required}"
 CANDIDATE_FILE="${CANDIDATE_FILE:?CANDIDATE_FILE env var is required}"
 HTML_REPORT_FILE="${HTML_REPORT_FILE:?HTML_REPORT_FILE env var is required}"
@@ -37,18 +38,33 @@ until curl -sf "$ollama_url/api/tags" | grep -q '"name"'; do
   sleep 2
 done
 
-prompt=$(cat "$COMPARISON_PROMPT_FILE")
-prompt="${prompt//\{\{BASELINE_K6\}\}/$baseline_k6}"
-prompt="${prompt//\{\{CANDIDATE_K6\}\}/$candidate_k6}"
-prompt="${prompt//\{\{COMMON_METRICS\}\}/$common_metrics}"
+prompt=$(jq -Rn \
+  --rawfile template "$COMPARISON_PROMPT_FILE" \
+  --arg baseline_k6 "$baseline_k6" \
+  --arg candidate_k6 "$candidate_k6" \
+  --arg common_metrics "$common_metrics" \
+  '$template
+    | gsub("\\{\\{BASELINE_K6\\}\\}"; $baseline_k6)
+    | gsub("\\{\\{CANDIDATE_K6\\}\\}"; $candidate_k6)
+    | gsub("\\{\\{COMMON_METRICS\\}\\}"; $common_metrics)')
 
 echo "$prompt"
 
-analysis_json=$(curl -s "$ollama_url/api/generate" -d "{
-  \"model\": \"default\",
-  \"stream\": false,
-  \"prompt\": $(jq -Rs . <<< "$prompt")
-}" | jq -c '.response')
+payload=$(jq -n \
+  --arg prompt "$prompt" \
+  --argjson temperature "$LLM_TEMPERATURE" \
+  '{
+    model: "default",
+    stream: false,
+    prompt: $prompt,
+    options: {
+      temperature: $temperature,
+      top_p: 0.9,
+      repeat_penalty: 1.1
+    }
+  }')
+
+analysis_json=$(curl -s "$ollama_url/api/generate" -d "$payload" | jq -c '.response')
 
 generated_at=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 baseline_metrics_json=$(jq -c '.metrics' <<< "$baseline")

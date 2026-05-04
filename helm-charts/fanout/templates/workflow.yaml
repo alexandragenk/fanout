@@ -389,6 +389,8 @@ spec:
         env:
           - name: ollama_url
             value: {{ $workflow.ollamaUrl | quote }}
+          - name: LLM_TEMPERATURE
+            value: {{ $workflow.llmTemperature | quote }}
           - name: RUN_ANALYSIS_PROMPT_FILE
             value: {{ $workflow.runAnalysisPromptFile | quote }}
           - name: RUN_REPORT_FILE
@@ -451,6 +453,8 @@ spec:
         env:
           - name: ollama_url
             value: {{ $workflow.ollamaUrl | quote }}
+          - name: LLM_TEMPERATURE
+            value: {{ $workflow.llmTemperature | quote }}
           - name: COMPARISON_PROMPT_FILE
             value: {{ $workflow.comparisonPromptFile | quote }}
           - name: BASELINE_FILE

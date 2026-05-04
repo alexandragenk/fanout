@@ -103,6 +103,7 @@ workflow:
   serviceUrl: http://feed-svc:8080
   prometheusUrl: http://kube-prom-stack-kube-prome-prometheus.monitoring.svc:9090
   ollamaUrl: http://ollama:11434
+  llmTemperature: 0.1
   duration: 2m
   promqlQueriesFile: /config/queries.txt
   k6ScriptFile: /config-k6/load_k6_feed.js

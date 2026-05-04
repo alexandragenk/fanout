@@ -3,6 +3,7 @@ set -euo pipefail
 
 : "${ollama_url:?ollama_url env var is required}"
 
+LLM_TEMPERATURE="${LLM_TEMPERATURE:-0.1}"
 RUN_REPORT_FILE="${RUN_REPORT_FILE:?RUN_REPORT_FILE env var is required}"
 HTML_REPORT_FILE="${HTML_REPORT_FILE:?HTML_REPORT_FILE env var is required}"
 HTML_TEMPLATE_FILE="${HTML_TEMPLATE_FILE:?HTML_TEMPLATE_FILE env var is required}"
@@ -24,6 +25,7 @@ if [[ ! -f "$HTML_TEMPLATE_FILE" ]]; then
 fi
 
 run_report=$(cat "$RUN_REPORT_FILE")
+k6_output=$(jq -r '.k6_output // ""' <<< "$run_report")
 metrics_agg=$(jq -r '
   (.metrics_agg // {})
   | to_entries[]
@@ -35,16 +37,31 @@ until curl -sf "$ollama_url/api/tags" | grep -q '"name"'; do
   sleep 2
 done
 
-prompt=$(cat "$RUN_ANALYSIS_PROMPT_FILE")
-prompt="${prompt//\$metrics_agg/$metrics_agg}"
+prompt=$(jq -Rn \
+  --rawfile template "$RUN_ANALYSIS_PROMPT_FILE" \
+  --arg k6_output "$k6_output" \
+  --arg metrics_agg "$metrics_agg" \
+  '$template
+    | gsub("\\$k6_output"; $k6_output)
+    | gsub("\\$metrics_agg"; $metrics_agg)')
 
 echo "$prompt"
 
-analysis=$(curl -s "$ollama_url/api/generate" -d "{
-  \"model\": \"default\",
-  \"stream\": false,
-  \"prompt\": $(jq -Rs . <<< "$prompt")
-}" | jq -r '.response')
+payload=$(jq -n \
+  --arg prompt "$prompt" \
+  --argjson temperature "$LLM_TEMPERATURE" \
+  '{
+    model: "default",
+    stream: false,
+    prompt: $prompt,
+    options: {
+      temperature: $temperature,
+      top_p: 0.9,
+      repeat_penalty: 1.1
+    }
+  }')
+
+analysis=$(curl -s "$ollama_url/api/generate" -d "$payload" | jq -r '.response')
 analysis_json=$(jq -Rs . <<< "$analysis")
 
 generated_at=$(date -u +"%Y-%m-%d %H:%M:%S UTC")

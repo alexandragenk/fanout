@@ -256,6 +256,7 @@ JSON-отчёты содержат:
 - `workflow.duration` управляет длительностью k6-теста и окном агрегации Prometheus
 - `workflow.serviceUrl` задаёт target для k6, по умолчанию `http://feed-svc:8080`
 - `workflow.prometheusUrl` указывает на kube-prometheus-stack
+- `workflow.llmTemperature` задаёт температуру LLM для анализа, по умолчанию `0.1`
 - `promqlQueries` задаёт список PromQL-запросов для сравнения
 - `k6Script` задаёт сценарий нагрузки
 - `comparisonPrompt` задаёт prompt-шаблон для LLM
