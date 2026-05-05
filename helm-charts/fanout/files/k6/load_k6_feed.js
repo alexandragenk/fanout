@@ -1,4 +1,5 @@
 import http from 'k6/http';
+import exec from 'k6/execution';
 
 const configPath = __ENV.K6_CONFIG_FILE || '/config-k6/config.json';
 const config = JSON.parse(open(configPath));
@@ -13,6 +14,12 @@ if (!testDuration) {
     throw new Error('duration env var or config duration is required');
 }
 
+const numUsers = Number(__ENV.NUM_USERS || config.numUsers);
+
+if (!Number.isInteger(numUsers) || numUsers < 1) {
+    throw new Error('NUM_USERS env var or config numUsers must be a positive integer');
+}
+
 function buildOptions() {
     if (config.mode === 'rps') {
         return {
@@ -23,7 +30,6 @@ function buildOptions() {
                     timeUnit: config.timeUnit || '1s',
                     duration: testDuration,
                     preAllocatedVUs: Number(config.preAllocatedVUs),
-                    maxVUs: Number(config.maxVUs),
                 },
             },
         };
@@ -40,9 +46,11 @@ export const options = buildOptions();
 const base_url = __ENV.service_url;
 
 export default function () {
+    const userId = (exec.scenario.iterationInTest % numUsers) + 1;
+
     http.get(base_url + '/feed', {
         headers: {
-            'X-User-Id': String(__VU),
+            'X-User-Id': String(userId),
         },
     });
 }
