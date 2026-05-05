@@ -22,7 +22,7 @@ if (!Number.isInteger(numUsers) || numUsers < 1) {
 
 function buildOptions() {
     if (config.mode === 'rps') {
-        return {
+                return {
             scenarios: {
                 feed_rps: {
                     executor: 'constant-arrival-rate',
@@ -30,6 +30,7 @@ function buildOptions() {
                     timeUnit: config.timeUnit || '1s',
                     duration: testDuration,
                     preAllocatedVUs: Number(config.preAllocatedVUs),
+                    maxVUs: Number(config.maxVUs)
                 },
             },
         };
