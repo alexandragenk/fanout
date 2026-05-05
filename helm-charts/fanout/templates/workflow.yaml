@@ -148,12 +148,8 @@ spec:
             template: seed-data
             when: {{ printf "%s == true" (include "fanout.argo" "workflow.parameters.seed-data-enabled") | quote }}
 
-          - name: warm-up-baseline
-            depends: "seed-data.Succeeded || seed-data.Skipped"
-            template: run-k6-warmup
-
           - name: run-baseline
-            depends: warm-up-baseline
+            depends: "seed-data.Succeeded || seed-data.Skipped"
             template: run-assistant-collect
             arguments:
               parameters:
@@ -193,12 +189,8 @@ spec:
             depends: deploy-new-version
             template: wait-services
 
-          - name: warm-up-candidate
-            depends: wait-services-new
-            template: run-k6-warmup
-
           - name: run-candidate
-            depends: warm-up-candidate
+            depends: wait-services-new
             template: run-assistant-collect
             arguments:
               parameters:
@@ -243,33 +235,6 @@ spec:
             echo "prometheus readiness check passed"
             until curl -sf {{ $workflow.ollamaUrl }}/api/tags >/dev/null; do echo waiting ollama; sleep 5; done
             echo "ollama readiness check passed"
-
-    - name: run-k6-warmup
-      container:
-        image: {{ $workflow.assistantImage.image | quote }}
-        imagePullPolicy: {{ $workflow.assistantImage.pullPolicy }}
-        command: [bash, -lc]
-        args:
-          - |
-            set -euo pipefail
-            echo "Starting k6 warm-up for {{ include "fanout.argo" "workflow.parameters.warmup-duration" }}"
-            k6 run --quiet \
-              -e service_url="$service_url" \
-              -e duration="$duration" \
-              -e K6_CONFIG_FILE="$K6_CONFIG_FILE" \
-              "$K6_SCRIPT_FILE"
-        volumeMounts:
-          - name: k6-scripts-config
-            mountPath: /config-k6
-        env:
-          - name: service_url
-            value: {{ $workflow.serviceUrl | quote }}
-          - name: duration
-            value: {{ include "fanout.argo" "workflow.parameters.warmup-duration" | quote }}
-          - name: K6_SCRIPT_FILE
-            value: {{ $workflow.k6ScriptFile | quote }}
-          - name: K6_CONFIG_FILE
-            value: /config-k6/config.json
 
     - name: seed-data
       container:
@@ -337,6 +302,10 @@ spec:
             value: {{ $workflow.ollamaUrl | quote }}
           - name: duration
             value: {{ include "fanout.argo" "workflow.parameters.duration" | quote }}
+          - name: warmup_duration
+            value: {{ include "fanout.argo" "workflow.parameters.warmup-duration" | quote }}
+          - name: NUM_USERS
+            value: {{ include "fanout.argo" "workflow.parameters.seed-data-num-users" | quote }}
           - name: PROMQL_QUERIES_FILE
             value: {{ $workflow.promqlQueriesFile | quote }}
           - name: K6_SCRIPT_FILE

@@ -5,6 +5,7 @@ set -euo pipefail
 : "${prometheus_url:?prometheus_url env var is required}"
 : "${duration:?duration env var is required}"
 
+warmup_duration="${warmup_duration:-0s}"
 REPORT_FILE="${REPORT_FILE:?REPORT_FILE env var is required}"
 K6_HTML_REPORT_FILE="${K6_HTML_REPORT_FILE:?K6_HTML_REPORT_FILE env var is required}"
 QUERIES_FILE="${PROMQL_QUERIES_FILE:?PROMQL_QUERIES_FILE env var is required}"
@@ -29,9 +30,19 @@ fi
 k6_output_file=$(mktemp)
 trap 'rm -f "$k6_output_file"' EXIT
 
-echo "Starting k6 stress test..."
-start=$(date +%s)
 mkdir -p "$(dirname "$REPORT_FILE")" "$(dirname "$K6_HTML_REPORT_FILE")"
+
+if [[ "$warmup_duration" != "0" && "$warmup_duration" != "0s" ]]; then
+  echo "Starting k6 warm-up for $warmup_duration..."
+  k6 run --quiet \
+    -e service_url="$service_url" \
+    -e duration="$warmup_duration" \
+    -e K6_CONFIG_FILE="$K6_CONFIG_FILE" \
+    "$K6_SCRIPT_FILE"
+fi
+
+echo "Starting measured k6 stress test for $duration..."
+start=$(date +%s)
 K6_WEB_DASHBOARD=true \
 K6_WEB_DASHBOARD_PORT=-1 \
 K6_WEB_DASHBOARD_EXPORT="$K6_HTML_REPORT_FILE" \
