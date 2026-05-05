@@ -37,7 +37,7 @@ until curl -sf "$ollama_url/api/tags" | grep -q '"name"'; do
   sleep 2
 done
 
-prompt=$(jq -Rn \
+prompt=$(jq -Rrn \
   --rawfile template "$RUN_ANALYSIS_PROMPT_FILE" \
   --arg k6_output "$k6_output" \
   --arg metrics_agg "$metrics_agg" \

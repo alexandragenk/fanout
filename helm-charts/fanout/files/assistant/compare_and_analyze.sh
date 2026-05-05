@@ -38,7 +38,7 @@ until curl -sf "$ollama_url/api/tags" | grep -q '"name"'; do
   sleep 2
 done
 
-prompt=$(jq -Rn \
+prompt=$(jq -Rrn \
   --rawfile template "$COMPARISON_PROMPT_FILE" \
   --arg baseline_k6 "$baseline_k6" \
   --arg candidate_k6 "$candidate_k6" \

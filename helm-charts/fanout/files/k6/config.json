@@ -3,5 +3,5 @@
   "rps": 600,
   "timeUnit": "1s",
   "preAllocatedVUs": 64,
-  "maxVUs": 64
+  "maxVUs": 200
 }
