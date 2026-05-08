@@ -1,7 +1,7 @@
 {
   "mode": "rps",
-  "rps": 600,
+  "rps": 500,
   "timeUnit": "1s",
-  "preAllocatedVUs": 32,
+  "preAllocatedVUs": 16,
   "maxVUs": 1000
 }
