@@ -115,5 +115,5 @@ workflow:
     enabled: true
   seedData:
     enabled: false
-    numUsers: 16
-    postsPerUser: 10
+    numUsers: 32
+    postsPerUser: 16
