@@ -1,5 +1,19 @@
 {{- $ollama := .Values.ollama -}}
 {{- if $ollama.enabled }}
+{{- if $ollama.storage.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-data
+  namespace: {{ .Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $ollama.storage.size }}
+---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,6 +32,7 @@ spec:
       containers:
         - name: ollama
           image: {{ $ollama.image | quote }}
+          imagePullPolicy: {{ $ollama.imagePullPolicy | quote }}
           ports:
             - containerPort: {{ $ollama.port }}
           command: ["sh", "-c"]
@@ -25,7 +40,9 @@ spec:
             - |
               ollama serve &
               sleep 5
-              ollama pull {{ $ollama.model }}
+              if ! ollama list | awk 'NR > 1 {print $1}' | grep -qx {{ $ollama.model | quote }}; then
+                ollama pull {{ $ollama.model }}
+              fi
               ollama cp {{ $ollama.model }} default || true
               wait
           volumeMounts:
@@ -33,7 +50,12 @@ spec:
               mountPath: /root/.ollama
       volumes:
         - name: ollama-data
+{{- if $ollama.storage.enabled }}
+          persistentVolumeClaim:
+            claimName: ollama-data
+{{- else }}
           emptyDir: {}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service

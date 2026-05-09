@@ -43,8 +43,12 @@ postgres:
 ollama:
   enabled: true
   image: ollama/ollama:latest
+  imagePullPolicy: IfNotPresent
   port: 11434
   model: gemma4:e4b
+  storage:
+    enabled: true
+    size: 10Gi
 
 observability:
   serviceMonitor:
